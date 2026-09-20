@@ -29,13 +29,27 @@ export function hoursBetween(startIso: string, endIso: string | null): number {
 }
 
 /**
- * Whole-hour duration between two timestamps: both times are truncated down
- * to the start of their hour (minutes dropped) before taking the difference.
- * e.g. clock in 7:30, clock out 9:10 -> 7:00 to 9:00 = 2 hours (not 1h40m).
+ * Rounds a clock-in time to the nearest hour: 30+ minutes into the hour
+ * rounds up to the next hour (e.g. 4:30 or 4:50 -> 5:00), otherwise it
+ * rounds down to the start of the current hour (e.g. 4:10 -> 4:00).
+ */
+function roundClockInToHour(date: Date): Date {
+  const rounded = new Date(date);
+  if (rounded.getMinutes() >= 30) {
+    rounded.setHours(rounded.getHours() + 1);
+  }
+  rounded.setMinutes(0, 0, 0);
+  return rounded;
+}
+
+/**
+ * Whole-hour duration between two timestamps: the clock-in time rounds to
+ * the nearest hour (30+ minutes rounds up to the next hour, e.g. 4:50 ->
+ * 5:00) and the clock-out time is truncated down to the start of its hour.
+ * e.g. clock in 4:50, clock out 9:10 -> 5:00 to 9:00 = 4 hours.
  */
 export function truncatedHoursBetween(startIso: string, endIso: string | null): number {
-  const start = new Date(startIso);
-  start.setMinutes(0, 0, 0);
+  const start = roundClockInToHour(new Date(startIso));
   const end = endIso ? new Date(endIso) : new Date();
   end.setMinutes(0, 0, 0);
   return Math.max(0, (end.getTime() - start.getTime()) / 3_600_000);

@@ -151,7 +151,9 @@ export default function TimeRecordPage() {
             <CardTitle>Subtotal by Employee</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
               Hours totaled per employee for the records shown below. Each entry counts only whole
-              hours (e.g. 7:30 in – 9:10 out counts as 7:00–9:00 = 2h).
+              hours: clock-in rounds to the nearest hour (30+ minutes rounds up, e.g. 4:50 in
+              becomes 5:00) and clock-out rounds down (e.g. 4:50 in – 9:10 out counts as
+              5:00–9:00 = 4h).
             </p>
           </CardHeader>
           <CardContent>
