@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Search, Camera, Trash2, RefreshCw } from "lucide-react";
@@ -64,6 +64,14 @@ const actionTone: Record<ScreenLogAction, "default" | "secondary" | "outline" | 
 };
 
 export default function ScreenLogsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ScreenLogsPageContent />
+    </Suspense>
+  );
+}
+
+function ScreenLogsPageContent() {
   const employees = usePayrollStore((s) => s.employees);
   const screenLogs = usePayrollStore((s) => s.screenLogs);
   const screenshots = usePayrollStore((s) => s.screenshots);
