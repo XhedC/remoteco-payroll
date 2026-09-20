@@ -13,6 +13,10 @@ export interface Employee {
   hourlyRate: number;
   avatarUrl?: string;
   joinedAt: string; // ISO date
+  /** Scheduled shift start time, e.g. "09:00" */
+  scheduleIn?: string;
+  /** Scheduled shift end time, e.g. "17:00" */
+  scheduleOut?: string;
 }
 
 export interface TimeEntry {

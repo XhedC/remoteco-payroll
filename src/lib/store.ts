@@ -47,6 +47,8 @@ function mapEmployee(row: EmployeeRow): Employee {
     hourlyRate: Number(row.hourly_rate),
     avatarUrl: row.avatar_url ?? undefined,
     joinedAt: row.joined_at,
+    scheduleIn: row.schedule_in ?? undefined,
+    scheduleOut: row.schedule_out ?? undefined,
   };
 }
 
@@ -602,6 +604,8 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
         title: employee.title,
         status: employee.status,
         hourlyRate: employee.hourlyRate,
+        scheduleIn: employee.scheduleIn,
+        scheduleOut: employee.scheduleOut,
         password,
       }),
     });
@@ -633,6 +637,8 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
         ...(patch.title !== undefined && { title: patch.title }),
         ...(patch.status !== undefined && { status: patch.status }),
         ...(patch.hourlyRate !== undefined && { hourly_rate: patch.hourlyRate }),
+        ...(patch.scheduleIn !== undefined && { schedule_in: patch.scheduleIn || null }),
+        ...(patch.scheduleOut !== undefined && { schedule_out: patch.scheduleOut || null }),
       })
       .eq("id", id)
       .select()

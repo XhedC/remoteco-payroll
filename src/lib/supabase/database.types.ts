@@ -70,6 +70,8 @@ export type Database = {
           joined_at: string
           name: string
           role: Database["public"]["Enums"]["employee_role"]
+          schedule_in: string | null
+          schedule_out: string | null
           status: Database["public"]["Enums"]["employee_status"]
           title: string
         }
@@ -83,6 +85,8 @@ export type Database = {
           joined_at?: string
           name: string
           role?: Database["public"]["Enums"]["employee_role"]
+          schedule_in?: string | null
+          schedule_out?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           title?: string
         }
@@ -96,6 +100,8 @@ export type Database = {
           joined_at?: string
           name?: string
           role?: Database["public"]["Enums"]["employee_role"]
+          schedule_in?: string | null
+          schedule_out?: string | null
           status?: Database["public"]["Enums"]["employee_status"]
           title?: string
         }

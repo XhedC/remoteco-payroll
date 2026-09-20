@@ -36,6 +36,8 @@ const emptyForm = {
   title: "",
   status: "Active" as EmployeeStatus,
   hourlyRate: "",
+  scheduleIn: "",
+  scheduleOut: "",
 };
 
 export function EmployeeDialog({ employee }: { employee?: Employee }) {
@@ -66,6 +68,8 @@ export function EmployeeDialog({ employee }: { employee?: Employee }) {
               title: employee.title,
               status: employee.status,
               hourlyRate: String(employee.hourlyRate),
+              scheduleIn: employee.scheduleIn ?? "",
+              scheduleOut: employee.scheduleOut ?? "",
             }
           : emptyForm,
       );
@@ -111,6 +115,8 @@ export function EmployeeDialog({ employee }: { employee?: Employee }) {
       title: form.title.trim(),
       status: form.status,
       hourlyRate: rate,
+      scheduleIn: form.scheduleIn || undefined,
+      scheduleOut: form.scheduleOut || undefined,
     };
 
     if (isEdit && employee) {
@@ -271,6 +277,24 @@ export function EmployeeDialog({ employee }: { employee?: Employee }) {
               step="0.5"
               value={form.hourlyRate}
               onChange={(e) => set("hourlyRate", e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="emp-schedule-in">Time Schedule In</Label>
+            <Input
+              id="emp-schedule-in"
+              type="time"
+              value={form.scheduleIn}
+              onChange={(e) => set("scheduleIn", e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="emp-schedule-out">Time Schedule Out</Label>
+            <Input
+              id="emp-schedule-out"
+              type="time"
+              value={form.scheduleOut}
+              onChange={(e) => set("scheduleOut", e.target.value)}
             />
           </div>
 

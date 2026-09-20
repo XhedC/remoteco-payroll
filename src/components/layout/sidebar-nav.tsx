@@ -21,8 +21,8 @@ export function SidebarNav({
   const logout = usePayrollStore((s) => s.logout);
   const items = visibleNavItems(role);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     toast.success("Signed out.");
     onNavigate?.();
     router.replace("/login");
@@ -72,10 +72,6 @@ export function SidebarNav({
           <LogOut className="size-4" />
           Log out
         </button>
-
-        <div className="rounded-lg border border-white/15 bg-white/10 p-3 text-xs text-teal-50/80">
-          Running on local mock data. Supabase sync comes next phase.
-        </div>
       </div>
     </div>
   );

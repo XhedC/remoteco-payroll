@@ -10,6 +10,8 @@ interface CreateEmployeeBody {
   title: string;
   status: EmployeeStatus;
   hourlyRate: number;
+  scheduleIn?: string;
+  scheduleOut?: string;
   password: string;
 }
 
@@ -91,6 +93,8 @@ export async function POST(request: Request) {
       title: body.title.trim(),
       status: body.status,
       hourly_rate: body.hourlyRate,
+      schedule_in: body.scheduleIn || null,
+      schedule_out: body.scheduleOut || null,
       joined_at: new Date().toISOString(),
     })
     .select()
