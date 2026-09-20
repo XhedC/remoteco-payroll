@@ -11,9 +11,9 @@ import { OwnerPasswordDialog } from "@/components/security/owner-password-dialog
  */
 export function useOwnerGate(description?: string) {
   const [open, setOpen] = useState(false);
-  const pendingAction = useRef<(() => void) | null>(null);
+  const pendingAction = useRef<(() => void | Promise<void>) | null>(null);
 
-  const requestOwnerAuth = (action: () => void) => {
+  const requestOwnerAuth = (action: () => void | Promise<void>) => {
     pendingAction.current = action;
     setOpen(true);
   };

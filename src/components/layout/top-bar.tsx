@@ -27,8 +27,8 @@ export function TopBar({ title }: { title: string }) {
   const logout = usePayrollStore((s) => s.logout);
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     toast.success("Signed out.");
     router.replace("/login");
   };

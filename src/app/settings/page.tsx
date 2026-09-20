@@ -38,8 +38,8 @@ export default function SettingsPage() {
   const set = <K extends keyof CompanySettings>(key: K, value: CompanySettings[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const saveSettings = () => {
-    updateSettings(form);
+  const saveSettings = async () => {
+    await updateSettings(form);
     toast.success("Settings saved.");
   };
 

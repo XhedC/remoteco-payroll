@@ -113,8 +113,8 @@ export default function ScreenLogsPage() {
   };
 
   const handleDeleteScreenshot = (id: string) => {
-    requestOwnerAuth(() => {
-      deleteScreenshot(id);
+    requestOwnerAuth(async () => {
+      await deleteScreenshot(id);
       toast.success("Screenshot deleted.");
     });
   };

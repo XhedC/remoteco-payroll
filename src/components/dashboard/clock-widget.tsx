@@ -49,13 +49,13 @@ export function ClockWidget() {
 
   const isClockedIn = !!activeEntry;
 
-  const handleClockIn = () => {
-    clockIn(currentUserId);
+  const handleClockIn = async () => {
+    await clockIn(currentUserId);
     toast.success(`Clocked in as ${employee?.name ?? "employee"}`);
   };
 
-  const handleClockOut = () => {
-    clockOut(currentUserId);
+  const handleClockOut = async () => {
+    await clockOut(currentUserId);
     toast.success(`Clocked out. Great work, ${employee?.name?.split(" ")[0] ?? ""}!`);
   };
 

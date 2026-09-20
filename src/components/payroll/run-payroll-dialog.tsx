@@ -32,7 +32,9 @@ export function RunPayrollDialog() {
   const [periodStart, setPeriodStart] = useState(initial.start);
   const [periodEnd, setPeriodEnd] = useState(initial.end);
 
-  const handleSubmit = () => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
     if (!periodStart || !periodEnd) {
       toast.error("Please select a pay period.");
       return;
@@ -41,10 +43,16 @@ export function RunPayrollDialog() {
       toast.error("Period start must be before period end.");
       return;
     }
-    const result = runPayroll(
+    setSubmitting(true);
+    const result = await runPayroll(
       new Date(periodStart).toISOString(),
       new Date(periodEnd).toISOString(),
     );
+    setSubmitting(false);
+    if (!result.success) {
+      toast.error(result.error ?? "Unable to run payroll.");
+      return;
+    }
     if (result.excludedHours > 0) {
       toast.success(
         `Payroll run created. ${result.excludedHours}h already paid in a previous run were excluded to avoid double payment.`,
@@ -93,7 +101,9 @@ export function RunPayrollDialog() {
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit}>Calculate & Run</Button>
+          <Button onClick={handleSubmit} disabled={submitting}>
+            Calculate & Run
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

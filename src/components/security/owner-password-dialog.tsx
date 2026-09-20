@@ -39,8 +39,13 @@ export function OwnerPasswordDialog({
     }
   }
 
-  const handleConfirm = () => {
-    if (!verifyOwnerPassword(password)) {
+  const [verifying, setVerifying] = useState(false);
+
+  const handleConfirm = async () => {
+    setVerifying(true);
+    const ok = await verifyOwnerPassword(password);
+    setVerifying(false);
+    if (!ok) {
       setError("Incorrect owner password.");
       return;
     }
@@ -83,7 +88,7 @@ export function OwnerPasswordDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={handleConfirm}>
+          <Button variant="destructive" onClick={handleConfirm} disabled={verifying}>
             Authorize
           </Button>
         </DialogFooter>

@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { usePayrollStore } from "@/lib/store";
+import { getEmployeeOrOwner } from "@/lib/mock-data";
 import {
   formatCurrency,
   formatDate,
@@ -51,7 +52,7 @@ export default function EmployeeHistoryPage() {
   const screenLogs = usePayrollStore((s) => s.screenLogs);
   const isClockedIn = usePayrollStore((s) => s.isClockedIn);
 
-  const employee = employees.find((e) => e.id === employeeId);
+  const employee = getEmployeeOrOwner(employees, employeeId);
 
   const entries = [...timeEntries]
     .filter((t) => t.employeeId === employeeId)

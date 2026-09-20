@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -10,40 +10,46 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { usePayrollStore } from "@/lib/store";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
   const requestPasswordReset = usePayrollStore((s) => s.requestPasswordReset);
   const resetPassword = usePayrollStore((s) => s.resetPassword);
 
-  const [step, setStep] = useState<"email" | "reset">("email");
+  const [step, setStep] = useState<"request" | "sent" | "recovery">("request");
   const [email, setEmail] = useState("");
-  const [demoCode, setDemoCode] = useState<string | null>(null);
-  const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleRequestCode = (e: React.FormEvent) => {
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    const { data: subscription } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setStep("recovery");
+    });
+    return () => subscription.subscription.unsubscribe();
+  }, []);
+
+  const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
 
-    const result = requestPasswordReset(email);
+    const result = await requestPasswordReset(email);
     setSubmitting(false);
 
     if (!result.success) {
-      setError(result.error ?? "Unable to send a reset code.");
+      setError(result.error ?? "Unable to send a reset email.");
       return;
     }
 
-    setDemoCode(result.code ?? null);
-    setStep("reset");
-    toast.success("Reset code generated.");
+    setStep("sent");
+    toast.success("Reset email sent.");
   };
 
-  const handleResetPassword = (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -53,7 +59,7 @@ export default function ForgotPasswordPage() {
     }
 
     setSubmitting(true);
-    const result = resetPassword(email, code, newPassword);
+    const result = await resetPassword(newPassword);
     setSubmitting(false);
 
     if (!result.success) {
@@ -61,37 +67,63 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    await getSupabaseBrowserClient().auth.signOut();
     toast.success("Password reset. You can now sign in.");
     router.replace("/login");
   };
 
-  if (step === "email") {
+  if (step === "recovery") {
     return (
-      <AuthLayout
-        title="Forgot password"
-        description="Enter your account email to receive a reset code."
-      >
-        <form onSubmit={handleRequestCode} className="flex flex-col gap-4">
+      <AuthLayout title="Reset password" description="Choose a new password for your account.">
+        <form onSubmit={handleResetPassword} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="fp-email">Email</Label>
+            <Label htmlFor="fp-password">New Password</Label>
             <Input
-              id="fp-email"
-              type="email"
-              autoComplete="email"
+              id="fp-password"
+              type="password"
+              autoComplete="new-password"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@remoteco.com"
+              minLength={8}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="At least 8 characters"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="fp-confirm">Confirm New Password</Label>
+            <Input
+              id="fp-confirm"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={8}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter your password"
             />
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button type="submit" size="lg" className="w-full" disabled={submitting}>
-            Send reset code
+            Reset password
           </Button>
         </form>
+      </AuthLayout>
+    );
+  }
 
+  if (step === "sent") {
+    return (
+      <AuthLayout title="Check your email" description={`We sent a reset link to ${email}.`}>
+        <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+          <MailCheck className="mt-0.5 size-4 shrink-0 text-foreground" />
+          <p>
+            Click the link in that email to choose a new password. It&apos;ll bring you back to
+            this page automatically.
+          </p>
+        </div>
         <Link
           href="/login"
           className="mt-5 flex items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
@@ -103,72 +135,34 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <AuthLayout title="Reset password" description={`Enter the code sent to ${email}.`}>
-      {demoCode && (
-        <div className="mb-4 flex items-start gap-2 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-          <MailCheck className="mt-0.5 size-4 shrink-0 text-foreground" />
-          <p>
-            This demo has no email delivery yet, so here&apos;s your code directly:{" "}
-            <span className="font-semibold text-foreground">{demoCode}</span>
-          </p>
-        </div>
-      )}
-
-      <form onSubmit={handleResetPassword} className="flex flex-col gap-4">
+    <AuthLayout title="Forgot password" description="Enter your account email to receive a reset link.">
+      <form onSubmit={handleRequestReset} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="fp-code">Reset Code</Label>
+          <Label htmlFor="fp-email">Email</Label>
           <Input
-            id="fp-code"
-            inputMode="numeric"
+            id="fp-email"
+            type="email"
+            autoComplete="email"
             required
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="6-digit code"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="fp-password">New Password</Label>
-          <Input
-            id="fp-password"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={8}
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="At least 8 characters"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="fp-confirm">Confirm New Password</Label>
-          <Input
-            id="fp-confirm"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={8}
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Re-enter your password"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@remoteco.com"
           />
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <Button type="submit" size="lg" className="w-full" disabled={submitting}>
-          Reset password
+          Send reset link
         </Button>
       </form>
 
-      <button
-        type="button"
-        onClick={() => setStep("email")}
-        className="mt-5 flex w-full items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+      <Link
+        href="/login"
+        className="mt-5 flex items-center justify-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
-        <ArrowLeft className="size-3.5" /> Use a different email
-      </button>
+        <ArrowLeft className="size-3.5" /> Back to sign in
+      </Link>
     </AuthLayout>
   );
 }

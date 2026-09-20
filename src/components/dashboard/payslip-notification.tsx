@@ -23,8 +23,8 @@ export function PayslipNotification() {
 
   if (pending.length === 0) return null;
 
-  const handleConfirm = (id: string) => {
-    confirmPayslip(id);
+  const handleConfirm = async (id: string) => {
+    await confirmPayslip(id);
     toast.success("Thanks! Receipt of your salary has been confirmed.");
   };
 

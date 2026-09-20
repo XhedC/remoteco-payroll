@@ -138,8 +138,8 @@ export default function TimeRecordPage() {
     "Deleting a time record permanently removes it. Enter the owner password to continue.",
   );
 
-  const handleDelete = (id: string) => {
-    deleteTimeEntry(id);
+  const handleDelete = async (id: string) => {
+    await deleteTimeEntry(id);
     toast.success("Time record removed.");
   };
 

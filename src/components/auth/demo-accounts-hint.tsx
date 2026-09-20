@@ -9,7 +9,7 @@ export function DemoAccountsHint() {
   return (
     <div className="mt-5 flex flex-col gap-3">
       <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-        <p className="mb-1.5 font-medium text-foreground">Demo accounts (mock data, no email yet)</p>
+        <p className="mb-1.5 font-medium text-foreground">Demo accounts</p>
         {DEMO_ACCOUNTS.map((acc) => (
           <p key={acc.email}>
             <span className="font-medium text-foreground">{acc.role}:</span> {acc.email}

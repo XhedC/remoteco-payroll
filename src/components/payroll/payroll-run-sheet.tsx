@@ -53,8 +53,8 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
 
   const handleBulkStatusChange = (nextStatus: string | null) => {
     if (!nextStatus) return;
-    requestOwnerAuth(() => {
-      const result = updatePayrollRunStatus(run.id, nextStatus as PayPeriodStatus);
+    requestOwnerAuth(async () => {
+      const result = await updatePayrollRunStatus(run.id, nextStatus as PayPeriodStatus);
       if (!result.success) {
         toast.error(result.error ?? "Unable to update payroll status.");
         return;
@@ -66,8 +66,8 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
   const handleLineStatusChange = (employeeId: string, employeeName: string, nextStatus: string | null) => {
     const line = run.lines.find((l) => l.employeeId === employeeId);
     if (!nextStatus || !line || nextStatus === line.status) return;
-    requestOwnerAuth(() => {
-      const result = updatePayrollLineStatus(run.id, employeeId, nextStatus as PayPeriodStatus);
+    requestOwnerAuth(async () => {
+      const result = await updatePayrollLineStatus(run.id, employeeId, nextStatus as PayPeriodStatus);
       if (!result.success) {
         toast.error(result.error ?? "Unable to update payroll status.");
         return;

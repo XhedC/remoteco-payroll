@@ -55,8 +55,8 @@ export default function EmployeesPage() {
     );
   }, [employees, query]);
 
-  const handleDelete = (id: string, name: string) => {
-    deleteEmployee(id);
+  const handleDelete = async (id: string, name: string) => {
+    await deleteEmployee(id);
     toast.success(`${name} removed from directory.`);
   };
 

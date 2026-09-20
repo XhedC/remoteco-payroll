@@ -77,8 +77,9 @@ export function EmployeeDialog({ employee }: { employee?: Employee }) {
     }
   }
 
-  const handleAuthorize = () => {
-    if (!verifyOwnerPassword(ownerPassword)) {
+  const handleAuthorize = async () => {
+    const ok = await verifyOwnerPassword(ownerPassword);
+    if (!ok) {
       setOwnerError("Incorrect owner password.");
       return;
     }
@@ -89,7 +90,9 @@ export function EmployeeDialog({ employee }: { employee?: Employee }) {
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const handleSubmit = () => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
     if (!form.name.trim() || !form.email.trim() || !form.department.trim() || !form.title.trim()) {
       toast.error("Please fill in all required fields.");
       return;
@@ -111,7 +114,9 @@ export function EmployeeDialog({ employee }: { employee?: Employee }) {
     };
 
     if (isEdit && employee) {
-      updateEmployee(employee.id, payload);
+      setSubmitting(true);
+      await updateEmployee(employee.id, payload);
+      setSubmitting(false);
       toast.success("Employee updated.");
       setOpen(false);
       return;
@@ -126,7 +131,9 @@ export function EmployeeDialog({ employee }: { employee?: Employee }) {
       return;
     }
 
-    const result = addEmployee({ ...payload, joinedAt: new Date().toISOString() }, password);
+    setSubmitting(true);
+    const result = await addEmployee({ ...payload, joinedAt: new Date().toISOString() }, password);
+    setSubmitting(false);
     if (!result.success) {
       toast.error(result.error ?? "Unable to create this account.");
       return;
@@ -301,7 +308,9 @@ export function EmployeeDialog({ employee }: { employee?: Employee }) {
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit}>{isEdit ? "Save Changes" : "Create Account"}</Button>
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {isEdit ? "Save Changes" : "Create Account"}
+          </Button>
         </DialogFooter>
           </>
         )}

@@ -57,8 +57,11 @@ export function TimeEntryDialog({ entry }: { entry?: TimeEntry }) {
     }
   }
 
-  const handleAuthorize = () => {
-    if (!verifyOwnerPassword(ownerPassword)) {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleAuthorize = async () => {
+    const ok = await verifyOwnerPassword(ownerPassword);
+    if (!ok) {
       setOwnerError("Incorrect owner password.");
       return;
     }
@@ -66,7 +69,7 @@ export function TimeEntryDialog({ entry }: { entry?: TimeEntry }) {
     setOwnerError(null);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!employeeId || !clockIn) {
       toast.error("Employee and clock-in time are required.");
       return;
@@ -79,11 +82,14 @@ export function TimeEntryDialog({ entry }: { entry?: TimeEntry }) {
       return;
     }
 
+    setSubmitting(true);
     if (isEdit && entry) {
-      updateTimeEntry(entry.id, { employeeId, clockIn: clockInIso, clockOut: clockOutIso, note });
+      await updateTimeEntry(entry.id, { employeeId, clockIn: clockInIso, clockOut: clockOutIso, note });
+      setSubmitting(false);
       toast.success("Time record updated.");
     } else {
-      addManualTimeEntry({ employeeId, clockIn: clockInIso, clockOut: clockOutIso, note });
+      await addManualTimeEntry({ employeeId, clockIn: clockInIso, clockOut: clockOutIso, note });
+      setSubmitting(false);
       toast.success("Time record added.");
     }
     setOpen(false);
@@ -208,7 +214,9 @@ export function TimeEntryDialog({ entry }: { entry?: TimeEntry }) {
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSubmit}>{isEdit ? "Save Changes" : "Add Record"}</Button>
+              <Button onClick={handleSubmit} disabled={submitting}>
+                {isEdit ? "Save Changes" : "Add Record"}
+              </Button>
             </DialogFooter>
           </>
         )}
