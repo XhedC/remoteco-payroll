@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AuthLayout } from "@/components/auth/auth-layout";
-import { DemoAccountsHint } from "@/components/auth/demo-accounts-hint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -84,8 +83,6 @@ export default function LoginPage() {
       <p className="mt-5 text-center text-sm text-muted-foreground">
         New team member? Ask an administrator to create your account.
       </p>
-
-      <DemoAccountsHint />
     </AuthLayout>
   );
 }
