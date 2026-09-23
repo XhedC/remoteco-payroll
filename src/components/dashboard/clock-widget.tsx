@@ -46,12 +46,20 @@ export function ClockWidget() {
   const activeEntry = usePayrollStore((s) => s.activeEntry(currentUserId));
   const clockIn = usePayrollStore((s) => s.clockIn);
   const clockOut = usePayrollStore((s) => s.clockOut);
+  const requestScreenShare = usePayrollStore((s) => s.requestScreenShare);
 
   const isClockedIn = !!activeEntry;
 
   const handleClockIn = async () => {
+    const sharing = await requestScreenShare();
     await clockIn(currentUserId);
-    toast.success(`Clocked in as ${employee?.name ?? "employee"}`);
+    if (sharing) {
+      toast.success(`Clocked in as ${employee?.name ?? "employee"}. Screen sharing is active.`);
+    } else {
+      toast.warning(
+        `Clocked in as ${employee?.name ?? "employee"}, but screen sharing wasn't granted — periodic screenshots won't be captured this shift.`,
+      );
+    }
   };
 
   const handleClockOut = async () => {

@@ -7,7 +7,6 @@ import {
   OWNER_EMPLOYEE_ID,
   OWNER_USERNAME,
   ownerEmployee,
-  screenshotPlaceholder,
   SCREENSHOT_RETENTION_MS,
 } from "./mock-data";
 import type {
@@ -168,6 +167,13 @@ interface PayrollStore {
   session: Session | null;
   hasHydrated: boolean;
 
+  /** The live screen-share stream granted by the current user, if any (not persisted). */
+  screenStream: MediaStream | null;
+  /** Prompts the browser's native screen-share picker. Resolves false if denied/cancelled/unsupported. */
+  requestScreenShare: () => Promise<boolean>;
+  /** Stops all tracks of the active screen-share stream, if any. */
+  stopScreenShare: () => void;
+
   /** Resolves the current Supabase session (if any) and loads all app data. Call once at app start. */
   bootstrap: () => Promise<void>;
   /** Refetches every table from Supabase into local state. */
@@ -196,8 +202,8 @@ interface PayrollStore {
   updateTimeEntry: (id: string, patch: Partial<TimeEntry>) => Promise<void>;
   deleteTimeEntry: (id: string) => Promise<void>;
 
-  /** Captures a simulated screenshot for a clocked-in employee's shift and uploads it to Storage. */
-  captureScreenshot: (employeeId: string, timeEntryId: string) => Promise<void>;
+  /** Captures a real frame from the active screen-share stream and uploads it to Storage. */
+  captureScreenshot: (employeeId: string, timeEntryId: string, image: Blob) => Promise<void>;
   deleteScreenshot: (id: string) => Promise<void>;
   /** Drops any screenshot older than the 3-day retention window from local state. */
   pruneScreenshotsNow: () => void;
@@ -261,6 +267,27 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
 
   session: null,
   hasHydrated: false,
+  screenStream: null,
+
+  requestScreenShare: async () => {
+    if (get().screenStream) return true;
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getDisplayMedia) return false;
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+        if (get().screenStream === stream) set({ screenStream: null });
+      });
+      set({ screenStream: stream });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  stopScreenShare: () => {
+    get().screenStream?.getTracks().forEach((t) => t.stop());
+    set({ screenStream: null });
+  },
 
   bootstrap: async () => {
     const {
@@ -411,6 +438,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
       await insertLog(employeeId, "Logout", "Signed out");
     }
     get().unsubscribeRealtime();
+    get().stopScreenShare();
     await supabase.auth.signOut();
     set({
       session: null,
@@ -482,6 +510,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
     if (error || !data) return;
 
     const log = await insertLog(employeeId, "Clock Out", "Clocked out for the day");
+    get().stopScreenShare();
     set((state) => ({
       timeEntries: state.timeEntries.map((t) => (t.id === active.id ? mapTimeEntry(data) : t)),
       screenLogs: log ? [log, ...state.screenLogs] : state.screenLogs,
@@ -527,18 +556,14 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
     set((state) => ({ timeEntries: state.timeEntries.filter((t) => t.id !== id) }));
   },
 
-  captureScreenshot: async (employeeId, timeEntryId) => {
-    const employee = get().getEmployee(employeeId);
+  captureScreenshot: async (employeeId, timeEntryId, image) => {
     const capturedAt = new Date().toISOString();
-    const svg = screenshotPlaceholder(employee?.name ?? "Unknown", capturedAt);
     const id = crypto.randomUUID();
-    const storagePath = `${employeeId}/${id}.svg`;
+    const storagePath = `${employeeId}/${id}.png`;
 
     const { error: uploadError } = await supabase.storage
       .from("screenshots")
-      .upload(storagePath, new Blob([svg], { type: "image/svg+xml" }), {
-        contentType: "image/svg+xml",
-      });
+      .upload(storagePath, image, { contentType: "image/png" });
     if (uploadError) return;
 
     const { data, error } = await supabase

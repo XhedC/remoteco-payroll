@@ -35,6 +35,7 @@ import {
 import { usePayrollStore } from "@/lib/store";
 import { useOwnerGate } from "@/lib/use-owner-gate";
 import { getEmployeeOrOwner } from "@/lib/mock-data";
+import { captureFrameFromStream } from "@/lib/screen-capture";
 import { formatDateTime } from "@/lib/format";
 import type { ScreenLogAction } from "@/lib/types";
 
@@ -81,6 +82,8 @@ function ScreenLogsPageContent() {
   );
   const captureScreenshot = usePayrollStore((s) => s.captureScreenshot);
   const deleteScreenshot = usePayrollStore((s) => s.deleteScreenshot);
+  const screenStream = usePayrollStore((s) => s.screenStream);
+  const requestScreenShare = usePayrollStore((s) => s.requestScreenShare);
   const { requestOwnerAuth, ownerDialog } = useOwnerGate(
     "Deleting a screenshot permanently removes it. Enter the owner password to continue.",
   );
@@ -114,9 +117,24 @@ function ScreenLogsPageContent() {
       .sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime());
   }, [screenshots, screenshotEmployeeFilter]);
 
-  const handleCaptureNow = () => {
+  const handleCaptureNow = async () => {
     if (!session || !activeEntry) return;
-    captureScreenshot(session.employeeId, activeEntry.id);
+    let stream = screenStream;
+    if (!stream) {
+      const granted = await requestScreenShare();
+      if (!granted) {
+        toast.error("Screen sharing wasn't granted, so a screenshot couldn't be captured.");
+        return;
+      }
+      stream = usePayrollStore.getState().screenStream;
+    }
+    if (!stream) return;
+    const blob = await captureFrameFromStream(stream);
+    if (!blob) {
+      toast.error("Unable to capture a frame from the shared screen.");
+      return;
+    }
+    await captureScreenshot(session.employeeId, activeEntry.id, blob);
     toast.success("Screenshot captured.");
   };
 
@@ -178,7 +196,7 @@ function ScreenLogsPageContent() {
                   <div key={shot.id} className="overflow-hidden rounded-lg border">
                     <Dialog>
                       <DialogTrigger render={<button type="button" className="block w-full" />}>
-                        {/* eslint-disable-next-line @next/next/no-img-element -- simulated data-URI images, next/image doesn't apply */}
+                        {/* eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URLs, next/image remote patterns not configured for this */}
                         <img
                           src={shot.imageDataUrl}
                           alt={`Screenshot of ${employee?.name ?? "employee"}`}
@@ -190,7 +208,7 @@ function ScreenLogsPageContent() {
                           <DialogTitle>{employee?.name ?? "Unknown"}</DialogTitle>
                           <DialogDescription>{formatDateTime(shot.capturedAt)}</DialogDescription>
                         </DialogHeader>
-                        {/* eslint-disable-next-line @next/next/no-img-element -- simulated data-URI images, next/image doesn't apply */}
+                        {/* eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URLs, next/image remote patterns not configured for this */}
                         <img src={shot.imageDataUrl} alt="" className="w-full rounded-lg" />
                       </DialogContent>
                     </Dialog>
