@@ -273,7 +273,11 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
     if (get().screenStream) return true;
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getDisplayMedia) return false;
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      // Hints the browser's picker to default to "Entire Screen" (Chrome/Edge respect this;
+      // the employee still confirms the native prompt once — browsers never allow silent capture).
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: "monitor" } as MediaTrackConstraints,
+      });
       stream.getVideoTracks()[0]?.addEventListener("ended", () => {
         if (get().screenStream === stream) set({ screenStream: null });
       });
