@@ -46,11 +46,13 @@ import {
 } from "@/lib/format";
 
 const ALL_EMPLOYEES = "all";
+const OVERTIME_MIN_MINUTES = 5;
 
 /**
  * Computes a time entry's Hours, Overtime, Late minutes, and the resulting
- * Total Hours (in minutes): lateness always subtracts from the base hours
- * and clock-out overtime always adds on top.
+ * Total Hours (in minutes): lateness always subtracts from the base hours;
+ * overtime adds on top only once it reaches 5 minutes (below that it still
+ * shows in the Overtime column but doesn't move Total Hours).
  */
 function computeEntryMinutes(
   clockIn: string,
@@ -61,7 +63,8 @@ function computeEntryMinutes(
   const hours = truncatedHoursBetween(clockIn, clockOut);
   const late = minutesLate(clockIn, scheduleIn);
   const overtime = minutesOvertime(clockIn, clockOut, scheduleIn, scheduleOut);
-  const totalMinutes = Math.max(0, hours * 60 - late + overtime);
+  const creditedOvertime = overtime >= OVERTIME_MIN_MINUTES ? overtime : 0;
+  const totalMinutes = Math.max(0, hours * 60 - late + creditedOvertime);
   return { hours, late, overtime, totalMinutes };
 }
 
