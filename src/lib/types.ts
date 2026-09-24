@@ -35,7 +35,7 @@ export interface PayrollLine {
   overtimeHours: number;
   hourlyRate: number;
   grossPay: number;
-  /** Manual adjustment applied on top of gross pay: subtracted from net pay (positive reduces pay, negative acts as a bonus). */
+  /** Manual adjustment added on top of gross pay to compute net pay (positive adds a bonus, negative subtracts/deducts). */
   adjustment: number;
   netPay: number;
   /** Per-employee payment status, settable independently of the run's overall status. */

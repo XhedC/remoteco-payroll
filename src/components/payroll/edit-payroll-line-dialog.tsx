@@ -64,7 +64,7 @@ export function EditPayrollLineDialog({
 
   const grossPay = Number(form.grossPay) || 0;
   const adjustment = Number(form.adjustment) || 0;
-  const netPayPreview = Math.round((grossPay - adjustment) * 100) / 100;
+  const netPayPreview = Math.round((grossPay + adjustment) * 100) / 100;
 
   const handleAuthorize = async () => {
     const ok = await verifyOwnerPassword(ownerPassword);
@@ -197,7 +197,7 @@ export function EditPayrollLineDialog({
                   step="0.01"
                   value={form.adjustment}
                   onChange={(e) => set("adjustment", e.target.value)}
-                  placeholder="Positive deducts, negative adds a bonus"
+                  placeholder="Positive adds a bonus, negative deducts"
                 />
               </div>
               <div className="col-span-2 flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 text-sm">

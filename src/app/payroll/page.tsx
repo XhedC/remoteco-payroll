@@ -161,7 +161,7 @@ export default function PayrollPage() {
                       </TableCell>
                       <TableCell>{formatCurrency(line.grossPay)}</TableCell>
                       <TableCell className="text-muted-foreground">
-                        {line.adjustment < 0 ? "+" : "-"}
+                        {line.adjustment >= 0 ? "+" : "-"}
                         {formatCurrency(Math.abs(line.adjustment))}
                       </TableCell>
                       <TableCell className="font-medium">{formatCurrency(line.netPay)}</TableCell>

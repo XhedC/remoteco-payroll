@@ -727,8 +727,9 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
         const overtimeHours = Math.max(totalHours - settings.overtimeThresholdHours, 0);
         const grossPay =
           regularHours * employee.hourlyRate + overtimeHours * employee.hourlyRate * settings.overtimeMultiplier;
-        const adjustment = grossPay * settings.defaultDeductionRate;
-        const netPay = grossPay - adjustment;
+        // Auto-computed adjustment is stored negative: a deduction always subtracts from gross pay.
+        const adjustment = -(grossPay * settings.defaultDeductionRate);
+        const netPay = grossPay + adjustment;
 
         return {
           employeeId: employee.id,
@@ -938,7 +939,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
     const overtimeHours = patch.overtimeHours ?? line.overtimeHours;
     const grossPay = patch.grossPay ?? line.grossPay;
     const adjustment = patch.adjustment ?? line.adjustment;
-    const netPay = Math.round((grossPay - adjustment) * 100) / 100;
+    const netPay = Math.round((grossPay + adjustment) * 100) / 100;
 
     const { error } = await supabase
       .from("payroll_lines")
