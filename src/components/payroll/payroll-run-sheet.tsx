@@ -32,6 +32,7 @@ import {
 import { usePayrollStore } from "@/lib/store";
 import { useOwnerGate } from "@/lib/use-owner-gate";
 import { computePayrollLineAccurate, formatCurrency, formatDate, formatHoursMinutes } from "@/lib/format";
+import { EditPayrollLineDialog } from "./edit-payroll-line-dialog";
 import type { PayPeriodStatus, PayrollRun } from "@/lib/types";
 
 const STATUS_OPTIONS: PayPeriodStatus[] = ["Pending", "On Processing", "Paid", "Unpaid"];
@@ -201,6 +202,12 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
                     {canAdjustPayroll && (
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          <EditPayrollLineDialog
+                            run={run}
+                            line={line}
+                            employeeName={employeeName}
+                            grossPay={grossPay}
+                          />
                           <Button
                             variant="ghost"
                             size="icon-xs"

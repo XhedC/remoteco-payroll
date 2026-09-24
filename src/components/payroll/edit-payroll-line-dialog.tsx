@@ -23,21 +23,21 @@ export function EditPayrollLineDialog({
   run,
   line,
   employeeName,
+  grossPay,
 }: {
   run: PayrollRun;
   line: PayrollLine;
   employeeName: string;
+  /** The accurate, currently-displayed Gross Pay (Total Hours x rate), used for the Net Pay preview. */
+  grossPay: number;
 }) {
   const updatePayrollLine = usePayrollStore((s) => s.updatePayrollLine);
   const verifyOwnerPassword = usePayrollStore((s) => s.verifyOwnerPassword);
 
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    regularHours: String(line.regularHours),
-    overtimeHours: String(line.overtimeHours),
-    grossPay: String(line.grossPay),
-    adjustment: String(line.adjustment),
-  });
+  // Deduction is the positive amount subtracted from gross pay (adjustment stored negative);
+  // a negative deduction here means a bonus added on top of gross pay.
+  const [deductionInput, setDeductionInput] = useState(String(-line.adjustment));
   const [authorized, setAuthorized] = useState(false);
   const [ownerPassword, setOwnerPassword] = useState("");
   const [ownerError, setOwnerError] = useState<string | null>(null);
@@ -47,24 +47,15 @@ export function EditPayrollLineDialog({
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) {
-      setForm({
-        regularHours: String(line.regularHours),
-        overtimeHours: String(line.overtimeHours),
-        grossPay: String(line.grossPay),
-        adjustment: String(line.adjustment),
-      });
+      setDeductionInput(String(-line.adjustment));
       setAuthorized(false);
       setOwnerPassword("");
       setOwnerError(null);
     }
   }
 
-  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
-    setForm((f) => ({ ...f, [key]: value }));
-
-  const grossPay = Number(form.grossPay) || 0;
-  const adjustment = Number(form.adjustment) || 0;
-  const netPayPreview = Math.round((grossPay + adjustment) * 100) / 100;
+  const deduction = Number(deductionInput) || 0;
+  const netPayPreview = Math.round((grossPay - deduction) * 100) / 100;
 
   const handleAuthorize = async () => {
     const ok = await verifyOwnerPassword(ownerPassword);
@@ -77,26 +68,21 @@ export function EditPayrollLineDialog({
   };
 
   const handleSubmit = async () => {
-    const regularHours = Number(form.regularHours);
-    const overtimeHours = Number(form.overtimeHours);
-    if ([regularHours, overtimeHours, grossPay, adjustment].some((v) => Number.isNaN(v))) {
-      toast.error("Please enter valid numbers.");
+    if (Number.isNaN(deduction)) {
+      toast.error("Please enter a valid number.");
       return;
     }
 
     setSubmitting(true);
     const result = await updatePayrollLine(run.id, line.employeeId, {
-      regularHours,
-      overtimeHours,
-      grossPay,
-      adjustment,
+      adjustment: -deduction,
     });
     setSubmitting(false);
     if (!result.success) {
       toast.error(result.error ?? "Unable to update this payroll line.");
       return;
     }
-    toast.success(`${employeeName}'s payroll updated.`);
+    toast.success(`${employeeName}'s deduction updated.`);
     setOpen(false);
   };
 
@@ -151,56 +137,30 @@ export function EditPayrollLineDialog({
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Adjust {employeeName}&apos;s Payroll</DialogTitle>
+              <DialogTitle>Edit {employeeName}&apos;s Deduction</DialogTitle>
               <DialogDescription>
-                Manually correct hours, gross pay, or the adjustment for this pay period. Net pay
-                recomputes automatically.
+                Total Hours and Gross Pay are computed automatically from time records and cannot
+                be edited here. Net pay recomputes automatically from the deduction below.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="pl-regular">Regular Hours</Label>
-                <Input
-                  id="pl-regular"
-                  type="number"
-                  step="0.01"
-                  value={form.regularHours}
-                  onChange={(e) => set("regularHours", e.target.value)}
-                />
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Gross pay</span>
+                <span className="font-semibold">{formatCurrency(grossPay)}</span>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="pl-overtime">Overtime Hours</Label>
+                <Label htmlFor="pl-deduction">Deduction</Label>
                 <Input
-                  id="pl-overtime"
+                  id="pl-deduction"
                   type="number"
                   step="0.01"
-                  value={form.overtimeHours}
-                  onChange={(e) => set("overtimeHours", e.target.value)}
+                  value={deductionInput}
+                  onChange={(e) => setDeductionInput(e.target.value)}
+                  placeholder="Positive subtracts from gross pay, negative adds a bonus"
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="pl-gross">Gross Pay</Label>
-                <Input
-                  id="pl-gross"
-                  type="number"
-                  step="0.01"
-                  value={form.grossPay}
-                  onChange={(e) => set("grossPay", e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="pl-adjustment">Adjustment</Label>
-                <Input
-                  id="pl-adjustment"
-                  type="number"
-                  step="0.01"
-                  value={form.adjustment}
-                  onChange={(e) => set("adjustment", e.target.value)}
-                  placeholder="Positive adds a bonus, negative deducts"
-                />
-              </div>
-              <div className="col-span-2 flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+              <div className="flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 text-sm">
                 <span className="text-muted-foreground">Net pay</span>
                 <span className="font-semibold">{formatCurrency(netPayPreview)}</span>
               </div>
