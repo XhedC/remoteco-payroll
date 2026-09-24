@@ -76,7 +76,10 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
       );
     const grossPay = (periodMinutes / 60) * line.hourlyRate;
     const netPay = grossPay + line.adjustment;
-    return { line, employee, periodMinutes, grossPay, netPay };
+    // Deduction is whatever brings the accurate Gross down to Net (Gross - Deduction = Net);
+    // a negative value here means the stored adjustment was actually a bonus.
+    const deduction = grossPay - netPay;
+    return { line, employee, periodMinutes, grossPay, deduction, netPay };
   });
 
   const totalNet = computedLines.reduce((sum, l) => sum + l.netPay, 0);
@@ -157,6 +160,7 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
                 <TableHead>Employee</TableHead>
                 <TableHead>Total Hours</TableHead>
                 <TableHead>Gross</TableHead>
+                <TableHead>Deduction</TableHead>
                 <TableHead>Net</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Confirmation</TableHead>
@@ -164,7 +168,7 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {computedLines.map(({ line, employee, periodMinutes, grossPay, netPay }) => {
+              {computedLines.map(({ line, employee, periodMinutes, grossPay, deduction, netPay }) => {
                 const employeeName = employee?.name ?? "Unknown";
                 const confirmation = confirmationFor(line.employeeId);
                 return (
@@ -172,6 +176,7 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
                     <TableCell className="font-medium">{employeeName}</TableCell>
                     <TableCell className="text-muted-foreground">{formatHoursMinutes(periodMinutes)}</TableCell>
                     <TableCell>{formatCurrency(grossPay)}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatCurrency(deduction)}</TableCell>
                     <TableCell className="font-medium">{formatCurrency(netPay)}</TableCell>
                     <TableCell>
                       <Select
