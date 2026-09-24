@@ -37,6 +37,7 @@ import { useOwnerGate } from "@/lib/use-owner-gate";
 import { getEmployeeOrOwner } from "@/lib/mock-data";
 import {
   formatDate,
+  formatHoursMinutes,
   formatMinutes,
   formatTime,
   minutesLate,
@@ -45,6 +46,19 @@ import {
 } from "@/lib/format";
 
 const ALL_EMPLOYEES = "all";
+const LATE_OVERTIME_THRESHOLD_MINUTES = 5;
+
+/**
+ * Total worked minutes adjusted for lateness/overtime: a clock-in more than
+ * 5 minutes late subtracts that lateness from the base hours, and a
+ * clock-out more than 5 minutes past schedule adds that overtime on top.
+ */
+function totalMinutes(baseHours: number, lateMinutes: number, overtimeMinutes: number): number {
+  let total = baseHours * 60;
+  if (lateMinutes > LATE_OVERTIME_THRESHOLD_MINUTES) total -= lateMinutes;
+  if (overtimeMinutes > LATE_OVERTIME_THRESHOLD_MINUTES) total += overtimeMinutes;
+  return Math.max(0, total);
+}
 
 function toDateStr(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -152,7 +166,17 @@ export default function TimeRecordPage() {
   };
 
   const handleDownload = () => {
-    const header = ["Employee", "Date", "Clock In", "Clock Out", "Hours", "Overtime", "Late", "Note"];
+    const header = [
+      "Employee",
+      "Date",
+      "Clock In",
+      "Clock Out",
+      "Hours",
+      "Overtime",
+      "Late",
+      "Total Hours",
+      "Note",
+    ];
     const rows = filteredEntries.map((entry) => {
       const employee = getEmployeeOrOwner(employees, entry.employeeId);
       const hours = truncatedHoursBetween(entry.clockIn, entry.clockOut);
@@ -171,6 +195,7 @@ export default function TimeRecordPage() {
         `${Math.round(hours)}h`,
         formatMinutes(overtime),
         formatMinutes(late),
+        formatHoursMinutes(totalMinutes(hours, late, overtime)),
         entry.note ?? "",
       ];
     });
@@ -327,6 +352,7 @@ export default function TimeRecordPage() {
                 <TableHead>Hours</TableHead>
                 <TableHead>Overtime</TableHead>
                 <TableHead>Late</TableHead>
+                <TableHead>Total Hours</TableHead>
                 <TableHead>Note</TableHead>
                 {!isSelfServiceOnly && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
@@ -361,6 +387,9 @@ export default function TimeRecordPage() {
                     <TableCell className={late > 0 ? "font-medium text-destructive" : "text-muted-foreground"}>
                       {formatMinutes(late)}
                     </TableCell>
+                    <TableCell className="font-medium">
+                      {formatHoursMinutes(totalMinutes(hours, late, overtime))}
+                    </TableCell>
                     <TableCell className="max-w-[200px] truncate text-muted-foreground">
                       {entry.note || "—"}
                     </TableCell>
@@ -384,7 +413,7 @@ export default function TimeRecordPage() {
               {filteredEntries.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={isSelfServiceOnly ? 8 : 9}
+                    colSpan={isSelfServiceOnly ? 9 : 10}
                     className="py-8 text-center text-muted-foreground"
                   >
                     {hasDateFilter

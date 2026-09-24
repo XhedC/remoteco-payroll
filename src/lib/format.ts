@@ -112,6 +112,14 @@ export function formatMinutes(minutes: number): string {
   return `${h}h ${m}m`;
 }
 
+/** Formats a (possibly zero) minute count as a duration, e.g. "6h 40m" / "8h". */
+export function formatHoursMinutes(totalMinutes: number): string {
+  const minutes = Math.max(0, Math.round(totalMinutes));
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 export function toDatetimeLocal(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
