@@ -98,7 +98,7 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
       <SheetTrigger render={<Button variant="outline" size="sm" />}>
         <Eye className="size-3.5" /> View
       </SheetTrigger>
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
+      <SheetContent className="flex w-full flex-col gap-0 p-0 data-[side=right]:sm:max-w-4xl">
         <SheetHeader className="gap-3 border-b">
           <SheetTitle>
             {formatDate(run.periodStart)} — {formatDate(run.periodEnd)}
