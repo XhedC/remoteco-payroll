@@ -46,13 +46,15 @@ import {
 } from "@/lib/format";
 
 const ALL_EMPLOYEES = "all";
-const OVERTIME_MIN_MINUTES = 5;
+const NET_ADJUSTMENT_MIN_MINUTES = 5;
 
 /**
  * Computes a time entry's Hours, Overtime, Late minutes, and the resulting
- * Total Hours (in minutes): lateness always subtracts from the base hours;
- * overtime adds on top only once it reaches 5 minutes (below that it still
- * shows in the Overtime column but doesn't move Total Hours).
+ * Total Hours (in minutes): late is netted against overtime first
+ * (overtime minus late), and that net adjustment only applies to Total
+ * Hours once it's 5+ minutes in magnitude — below that, Total Hours stays
+ * equal to the base Hours even though Overtime/Late still show their raw
+ * values in their own columns.
  */
 function computeEntryMinutes(
   clockIn: string,
@@ -63,8 +65,9 @@ function computeEntryMinutes(
   const hours = truncatedHoursBetween(clockIn, clockOut);
   const late = minutesLate(clockIn, scheduleIn);
   const overtime = minutesOvertime(clockIn, clockOut, scheduleIn, scheduleOut);
-  const creditedOvertime = overtime >= OVERTIME_MIN_MINUTES ? overtime : 0;
-  const totalMinutes = Math.max(0, hours * 60 - late + creditedOvertime);
+  const net = overtime - late;
+  const creditedNet = Math.abs(net) >= NET_ADJUSTMENT_MIN_MINUTES ? net : 0;
+  const totalMinutes = Math.max(0, hours * 60 + creditedNet);
   return { hours, late, overtime, totalMinutes };
 }
 
