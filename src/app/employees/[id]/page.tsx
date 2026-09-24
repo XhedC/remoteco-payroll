@@ -24,7 +24,6 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
-  formatHours,
   formatHoursMinutes,
   formatMinutes,
   formatTime,
@@ -70,7 +69,18 @@ export default function EmployeeHistoryPage() {
   const payrollHistory = payrollRuns
     .flatMap((run) => {
       const line = run.lines.find((l) => l.employeeId === employeeId);
-      return line ? [{ run, line }] : [];
+      if (!line) return [];
+      // Same accurate Total Hours computation as Time Record History (late
+      // netted against overtime, 5-minute threshold), scoped to this run's
+      // pay period so it matches what the employee actually logged then.
+      const periodMinutes = entries
+        .filter((t) => t.clockIn.slice(0, 10) >= run.periodStart && t.clockIn.slice(0, 10) <= run.periodEnd)
+        .reduce(
+          (sum, t) =>
+            sum + computeEntryMinutes(t.clockIn, t.clockOut, employee?.scheduleIn, employee?.scheduleOut).totalMinutes,
+          0,
+        );
+      return [{ run, line, periodMinutes }];
     })
     .sort((a, b) => new Date(b.run.periodStart).getTime() - new Date(a.run.periodStart).getTime());
 
@@ -259,13 +269,13 @@ export default function EmployeeHistoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payrollHistory.map(({ run, line }) => (
+              {payrollHistory.map(({ run, line, periodMinutes }) => (
                 <TableRow key={run.id}>
                   <TableCell className="font-medium">
                     {formatDate(run.periodStart)} — {formatDate(run.periodEnd)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {formatHours(line.regularHours + line.overtimeHours)}
+                    {formatHoursMinutes(periodMinutes)}
                   </TableCell>
                   <TableCell>{formatCurrency(line.grossPay)}</TableCell>
                   <TableCell className="font-medium">{formatCurrency(line.netPay)}</TableCell>
