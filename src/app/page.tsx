@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { usePayrollStore } from "@/lib/store";
 import { getEmployeeOrOwner } from "@/lib/mock-data";
 import { weeklyHours } from "@/lib/analytics";
-import { formatCurrency, formatDateTime, hoursBetween, initials } from "@/lib/format";
+import { computePayrollLineAccurate, formatCurrency, formatDateTime, hoursBetween, initials } from "@/lib/format";
 
 export default function DashboardPage() {
   const employees = usePayrollStore((s) => s.employees);
@@ -32,7 +32,22 @@ export default function DashboardPage() {
 
   const latestRun = payrollRuns[0];
   const latestRunTotal = latestRun
-    ? latestRun.lines.reduce((sum, l) => sum + l.netPay, 0)
+    ? latestRun.lines.reduce((sum, l) => {
+        const employee = employees.find((e) => e.id === l.employeeId);
+        return (
+          sum +
+          computePayrollLineAccurate(
+            latestRun.periodStart,
+            latestRun.periodEnd,
+            l.employeeId,
+            employee?.hourlyRate ?? l.hourlyRate,
+            l.adjustment,
+            timeEntries,
+            employee?.scheduleIn,
+            employee?.scheduleOut,
+          ).netPay
+        );
+      }, 0)
     : 0;
 
   const recentLogs = screenLogs.slice(0, 6);

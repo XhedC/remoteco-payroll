@@ -21,6 +21,7 @@ import { usePayrollStore } from "@/lib/store";
 import { getEmployeeOrOwner } from "@/lib/mock-data";
 import {
   computeEntryMinutes,
+  computePayrollLineAccurate,
   formatCurrency,
   formatDate,
   formatDateTime,
@@ -70,23 +71,26 @@ export default function EmployeeHistoryPage() {
     .flatMap((run) => {
       const line = run.lines.find((l) => l.employeeId === employeeId);
       if (!line) return [];
-      // Same accurate Total Hours computation as Time Record History (late
-      // netted against overtime, 5-minute threshold), scoped to this run's
-      // pay period so it matches what the employee actually logged then.
-      const periodMinutes = entries
-        .filter((t) => t.clockIn.slice(0, 10) >= run.periodStart && t.clockIn.slice(0, 10) <= run.periodEnd)
-        .reduce(
-          (sum, t) =>
-            sum + computeEntryMinutes(t.clockIn, t.clockOut, employee?.scheduleIn, employee?.scheduleOut).totalMinutes,
-          0,
-        );
-      return [{ run, line, periodMinutes }];
+      // Same shared, accurate computation as the Payroll run sheet: Total
+      // Hours from actual time entries in this run's pay period, Gross from
+      // the employee's current rate, Net from the stored adjustment.
+      const { periodMinutes, grossPay, netPay } = computePayrollLineAccurate(
+        run.periodStart,
+        run.periodEnd,
+        employeeId,
+        employee?.hourlyRate ?? line.hourlyRate,
+        line.adjustment,
+        timeEntries,
+        employee?.scheduleIn,
+        employee?.scheduleOut,
+      );
+      return [{ run, line, periodMinutes, grossPay, netPay }];
     })
     .sort((a, b) => new Date(b.run.periodStart).getTime() - new Date(a.run.periodStart).getTime());
 
   const totalNetPaid = payrollHistory
     .filter((x) => x.line.status === "Paid")
-    .reduce((sum, x) => sum + x.line.netPay, 0);
+    .reduce((sum, x) => sum + x.netPay, 0);
 
   const logs = screenLogs.filter((l) => l.employeeId === employeeId).slice(0, 8);
 
@@ -269,7 +273,7 @@ export default function EmployeeHistoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payrollHistory.map(({ run, line, periodMinutes }) => (
+              {payrollHistory.map(({ run, line, periodMinutes, grossPay, netPay }) => (
                 <TableRow key={run.id}>
                   <TableCell className="font-medium">
                     {formatDate(run.periodStart)} — {formatDate(run.periodEnd)}
@@ -277,8 +281,8 @@ export default function EmployeeHistoryPage() {
                   <TableCell className="text-muted-foreground">
                     {formatHoursMinutes(periodMinutes)}
                   </TableCell>
-                  <TableCell>{formatCurrency(line.grossPay)}</TableCell>
-                  <TableCell className="font-medium">{formatCurrency(line.netPay)}</TableCell>
+                  <TableCell>{formatCurrency(grossPay)}</TableCell>
+                  <TableCell className="font-medium">{formatCurrency(netPay)}</TableCell>
                   <TableCell>
                     <Badge variant={payStatusVariant[line.status]}>{line.status}</Badge>
                   </TableCell>

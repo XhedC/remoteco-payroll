@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/table";
 import { usePayrollStore } from "@/lib/store";
 import { useOwnerGate } from "@/lib/use-owner-gate";
-import { computeEntryMinutes, formatCurrency, formatDate, formatHoursMinutes } from "@/lib/format";
+import { computePayrollLineAccurate, formatCurrency, formatDate, formatHoursMinutes } from "@/lib/format";
 import type { PayPeriodStatus, PayrollRun } from "@/lib/types";
 
 const STATUS_OPTIONS: PayPeriodStatus[] = ["Pending", "On Processing", "Paid", "Unpaid"];
@@ -55,30 +55,22 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
   const confirmationFor = (employeeId: string) =>
     payslipConfirmations.find((c) => c.payrollRunId === run.id && c.employeeId === employeeId);
 
-  // Total Hours, Gross, and Net are recomputed here (not read straight off the
-  // stored line) so they always reflect the same accurate, late/overtime-netted
-  // hours shown on Time Record and Employee History, scoped to this run's pay
-  // period. The stored adjustment still applies to Net even though its own
-  // column is hidden.
+  // Total Hours, Gross, Deduction, and Net are recomputed here (not read
+  // straight off the stored line) via the shared computePayrollLineAccurate
+  // helper, so they always reflect the employee's current rate and the same
+  // accurate, late/overtime-netted hours shown everywhere else in the app.
   const computedLines = run.lines.map((line) => {
     const employee = employees.find((e) => e.id === line.employeeId);
-    const periodMinutes = timeEntries
-      .filter(
-        (t) =>
-          t.employeeId === line.employeeId &&
-          t.clockIn.slice(0, 10) >= run.periodStart &&
-          t.clockIn.slice(0, 10) <= run.periodEnd,
-      )
-      .reduce(
-        (sum, t) =>
-          sum + computeEntryMinutes(t.clockIn, t.clockOut, employee?.scheduleIn, employee?.scheduleOut).totalMinutes,
-        0,
-      );
-    const grossPay = (periodMinutes / 60) * line.hourlyRate;
-    const netPay = grossPay + line.adjustment;
-    // Deduction is whatever brings the accurate Gross down to Net (Gross - Deduction = Net);
-    // a negative value here means the stored adjustment was actually a bonus.
-    const deduction = grossPay - netPay;
+    const { periodMinutes, grossPay, deduction, netPay } = computePayrollLineAccurate(
+      run.periodStart,
+      run.periodEnd,
+      line.employeeId,
+      employee?.hourlyRate ?? line.hourlyRate,
+      line.adjustment,
+      timeEntries,
+      employee?.scheduleIn,
+      employee?.scheduleOut,
+    );
     return { line, employee, periodMinutes, grossPay, deduction, netPay };
   });
 

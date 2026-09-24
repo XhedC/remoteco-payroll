@@ -23,7 +23,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { RunPayrollDialog } from "@/components/payroll/run-payroll-dialog";
 import { PayrollRunSheet } from "@/components/payroll/payroll-run-sheet";
 import { usePayrollStore } from "@/lib/store";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { computePayrollLineAccurate, formatCurrency, formatDate, formatHoursMinutes } from "@/lib/format";
 import { Wallet, Users2, Clock4, DollarSign } from "lucide-react";
 import type { PayPeriodStatus } from "@/lib/types";
 
@@ -39,6 +39,7 @@ const statusVariant: Record<PayPeriodStatus, "default" | "secondary" | "outline"
 export default function PayrollPage() {
   const payrollRuns = usePayrollStore((s) => s.payrollRuns);
   const employees = usePayrollStore((s) => s.employees);
+  const timeEntries = usePayrollStore((s) => s.timeEntries);
   const currentEmployee = usePayrollStore((s) =>
     s.session ? s.getEmployee(s.session.employeeId) : undefined,
   );
@@ -58,10 +59,32 @@ export default function PayrollPage() {
   const lineFor = (runId: string) =>
     payrollRuns.find((r) => r.id === runId)?.lines.find((l) => l.employeeId === selectedEmployee?.id);
 
+  // Accurate Gross/Deduction/Net for one employee's line in one run: same
+  // shared computation as the Payroll run sheet and Employee History, using
+  // the employee's current rate and their actual time entries in the period.
+  const accurateFor = (run: (typeof payrollRuns)[number], employeeId: string) => {
+    const line = run.lines.find((l) => l.employeeId === employeeId);
+    const employee = employees.find((e) => e.id === employeeId);
+    if (!line) return null;
+    return {
+      line,
+      ...computePayrollLineAccurate(
+        run.periodStart,
+        run.periodEnd,
+        employeeId,
+        employee?.hourlyRate ?? line.hourlyRate,
+        line.adjustment,
+        timeEntries,
+        employee?.scheduleIn,
+        employee?.scheduleOut,
+      ),
+    };
+  };
+
   const netTotalFor = (run: (typeof payrollRuns)[number]) =>
     selectedEmployee
-      ? (lineFor(run.id)?.netPay ?? 0)
-      : run.lines.reduce((sum, l) => sum + l.netPay, 0);
+      ? (accurateFor(run, selectedEmployee.id)?.netPay ?? 0)
+      : run.lines.reduce((sum, l) => sum + (accurateFor(run, l.employeeId)?.netPay ?? 0), 0);
 
   const statusFor = (run: (typeof payrollRuns)[number]) =>
     selectedEmployee ? (lineFor(run.id)?.status ?? run.status) : run.status;
@@ -141,32 +164,29 @@ export default function PayrollPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Pay Period</TableHead>
-                  <TableHead>Reg / OT Hours</TableHead>
+                  <TableHead>Total Hours</TableHead>
                   <TableHead>Gross</TableHead>
-                  <TableHead>Adjustment</TableHead>
+                  <TableHead>Deduction</TableHead>
                   <TableHead>Net Pay</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {scopedRuns.map((run) => {
-                  const line = lineFor(run.id)!;
+                  const accurate = accurateFor(run, selectedEmployee.id)!;
                   return (
                     <TableRow key={run.id}>
                       <TableCell className="font-medium">
                         {formatDate(run.periodStart)} — {formatDate(run.periodEnd)}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {line.regularHours}h / {line.overtimeHours}h
+                        {formatHoursMinutes(accurate.periodMinutes)}
                       </TableCell>
-                      <TableCell>{formatCurrency(line.grossPay)}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {line.adjustment >= 0 ? "+" : "-"}
-                        {formatCurrency(Math.abs(line.adjustment))}
-                      </TableCell>
-                      <TableCell className="font-medium">{formatCurrency(line.netPay)}</TableCell>
+                      <TableCell>{formatCurrency(accurate.grossPay)}</TableCell>
+                      <TableCell className="text-muted-foreground">{formatCurrency(accurate.deduction)}</TableCell>
+                      <TableCell className="font-medium">{formatCurrency(accurate.netPay)}</TableCell>
                       <TableCell>
-                        <Badge variant={statusVariant[line.status]}>{line.status}</Badge>
+                        <Badge variant={statusVariant[accurate.line.status]}>{accurate.line.status}</Badge>
                       </TableCell>
                     </TableRow>
                   );
@@ -194,7 +214,10 @@ export default function PayrollPage() {
               </TableHeader>
               <TableBody>
                 {payrollRuns.map((run) => {
-                  const netTotal = run.lines.reduce((sum, l) => sum + l.netPay, 0);
+                  const netTotal = run.lines.reduce(
+                    (sum, l) => sum + (accurateFor(run, l.employeeId)?.netPay ?? 0),
+                    0,
+                  );
                   return (
                     <TableRow key={run.id}>
                       <TableCell className="font-medium">
