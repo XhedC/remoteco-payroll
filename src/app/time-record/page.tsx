@@ -46,18 +46,23 @@ import {
 } from "@/lib/format";
 
 const ALL_EMPLOYEES = "all";
-const LATE_OVERTIME_THRESHOLD_MINUTES = 5;
 
 /**
- * Total worked minutes adjusted for lateness/overtime: a clock-in more than
- * 5 minutes late subtracts that lateness from the base hours, and a
- * clock-out more than 5 minutes past schedule adds that overtime on top.
+ * Computes a time entry's Hours, Overtime, Late minutes, and the resulting
+ * Total Hours (in minutes): lateness always subtracts from the base hours
+ * and clock-out overtime always adds on top.
  */
-function totalMinutes(baseHours: number, lateMinutes: number, overtimeMinutes: number): number {
-  let total = baseHours * 60;
-  if (lateMinutes > LATE_OVERTIME_THRESHOLD_MINUTES) total -= lateMinutes;
-  if (overtimeMinutes > LATE_OVERTIME_THRESHOLD_MINUTES) total += overtimeMinutes;
-  return Math.max(0, total);
+function computeEntryMinutes(
+  clockIn: string,
+  clockOut: string | null,
+  scheduleIn: string | undefined,
+  scheduleOut: string | undefined,
+) {
+  const hours = truncatedHoursBetween(clockIn, clockOut);
+  const late = minutesLate(clockIn, scheduleIn);
+  const overtime = minutesOvertime(clockIn, clockOut, scheduleIn, scheduleOut);
+  const totalMinutes = Math.max(0, hours * 60 - late + overtime);
+  return { hours, late, overtime, totalMinutes };
 }
 
 function toDateStr(d: Date): string {
@@ -129,31 +134,39 @@ export default function TimeRecordPage() {
     return [...entries].sort((a, b) => new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime());
   }, [timeEntries, effectiveFilter, dateFrom, dateTo]);
 
-  const totalHours = filteredEntries.reduce(
-    (sum, t) => sum + truncatedHoursBetween(t.clockIn, t.clockOut),
-    0,
-  );
+  const totalMinutesAll = filteredEntries.reduce((sum, t) => {
+    const employee = getEmployeeOrOwner(employees, t.employeeId);
+    return sum + computeEntryMinutes(t.clockIn, t.clockOut, employee?.scheduleIn, employee?.scheduleOut).totalMinutes;
+  }, 0);
 
   const subtotals = useMemo(() => {
-    const byEmployee = new Map<string, { employeeId: string; name: string; records: number; hours: number }>();
+    const byEmployee = new Map<
+      string,
+      { employeeId: string; name: string; records: number; totalMinutes: number }
+    >();
     for (const entry of filteredEntries) {
       const employee = getEmployeeOrOwner(employees, entry.employeeId);
       const key = entry.employeeId;
-      const hours = truncatedHoursBetween(entry.clockIn, entry.clockOut);
+      const { totalMinutes } = computeEntryMinutes(
+        entry.clockIn,
+        entry.clockOut,
+        employee?.scheduleIn,
+        employee?.scheduleOut,
+      );
       const existing = byEmployee.get(key);
       if (existing) {
         existing.records += 1;
-        existing.hours += hours;
+        existing.totalMinutes += totalMinutes;
       } else {
         byEmployee.set(key, {
           employeeId: key,
           name: employee?.name ?? "Unknown",
           records: 1,
-          hours,
+          totalMinutes,
         });
       }
     }
-    return Array.from(byEmployee.values()).sort((a, b) => b.hours - a.hours);
+    return Array.from(byEmployee.values()).sort((a, b) => b.totalMinutes - a.totalMinutes);
   }, [filteredEntries, employees]);
 
   const { requestOwnerAuth, ownerDialog } = useOwnerGate(
@@ -179,9 +192,7 @@ export default function TimeRecordPage() {
     ];
     const rows = filteredEntries.map((entry) => {
       const employee = getEmployeeOrOwner(employees, entry.employeeId);
-      const hours = truncatedHoursBetween(entry.clockIn, entry.clockOut);
-      const late = minutesLate(entry.clockIn, employee?.scheduleIn);
-      const overtime = minutesOvertime(
+      const { hours, late, overtime, totalMinutes } = computeEntryMinutes(
         entry.clockIn,
         entry.clockOut,
         employee?.scheduleIn,
@@ -195,7 +206,7 @@ export default function TimeRecordPage() {
         `${Math.round(hours)}h`,
         formatMinutes(overtime),
         formatMinutes(late),
-        formatHoursMinutes(totalMinutes(hours, late, overtime)),
+        formatHoursMinutes(totalMinutes),
         entry.note ?? "",
       ];
     });
@@ -220,10 +231,8 @@ export default function TimeRecordPage() {
           <CardHeader>
             <CardTitle>Subtotal by Employee</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Hours totaled per employee for the records shown below. Each entry counts only whole
-              hours: clock-in rounds to the nearest hour (30+ minutes rounds up, e.g. 4:50 in
-              becomes 5:00) and clock-out rounds down (e.g. 4:50 in – 9:10 out counts as
-              5:00–9:00 = 4h).
+              Total Hours per employee for the records shown below: base hours (clock-in rounds to
+              the nearest hour, clock-out rounds down), minus late minutes, plus overtime minutes.
             </p>
           </CardHeader>
           <CardContent>
@@ -240,7 +249,7 @@ export default function TimeRecordPage() {
                   <TableRow key={row.employeeId}>
                     <TableCell className="font-medium">{row.name}</TableCell>
                     <TableCell className="text-muted-foreground">{row.records}</TableCell>
-                    <TableCell className="font-medium">{Math.round(row.hours)}h</TableCell>
+                    <TableCell className="font-medium">{formatHoursMinutes(row.totalMinutes)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -248,7 +257,7 @@ export default function TimeRecordPage() {
                 <TableRow>
                   <TableCell>Total</TableCell>
                   <TableCell className="text-muted-foreground">{filteredEntries.length}</TableCell>
-                  <TableCell>{Math.round(totalHours)}h</TableCell>
+                  <TableCell>{formatHoursMinutes(totalMinutesAll)}</TableCell>
                 </TableRow>
               </TableFooter>
             </Table>
@@ -265,7 +274,7 @@ export default function TimeRecordPage() {
               </Button>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              {filteredEntries.length} record(s) • {Math.round(totalHours)} total hours
+              {filteredEntries.length} record(s) • {formatHoursMinutes(totalMinutesAll)} total hours
               {hasDateFilter && (
                 <>
                   {" • "}
@@ -360,14 +369,12 @@ export default function TimeRecordPage() {
             <TableBody>
               {filteredEntries.map((entry) => {
                 const employee = getEmployeeOrOwner(employees, entry.employeeId);
-                const hours = truncatedHoursBetween(entry.clockIn, entry.clockOut);
-                const overtime = minutesOvertime(
+                const { hours, late, overtime, totalMinutes } = computeEntryMinutes(
                   entry.clockIn,
                   entry.clockOut,
                   employee?.scheduleIn,
                   employee?.scheduleOut,
                 );
-                const late = minutesLate(entry.clockIn, employee?.scheduleIn);
                 return (
                   <TableRow key={entry.id}>
                     <TableCell className="font-medium">{employee?.name ?? "Unknown"}</TableCell>
@@ -388,7 +395,7 @@ export default function TimeRecordPage() {
                       {formatMinutes(late)}
                     </TableCell>
                     <TableCell className="font-medium">
-                      {formatHoursMinutes(totalMinutes(hours, late, overtime))}
+                      {formatHoursMinutes(totalMinutes)}
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate text-muted-foreground">
                       {entry.note || "—"}
