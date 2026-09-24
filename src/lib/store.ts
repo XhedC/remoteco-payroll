@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { getSupabaseBrowserClient } from "./supabase/client";
 import type { Database } from "./supabase/database.types";
+import { truncatedHoursBetween } from "./format";
 import {
   defaultSettings,
   OWNER_EMAIL,
@@ -714,17 +715,19 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
           if (inTime < start || inTime > end) return false;
           const alreadyPaid = paidRanges.some(([ps, pe]) => inTime >= ps && inTime <= pe);
           if (alreadyPaid) {
-            excludedHours += (new Date(t.clockOut as string).getTime() - inTime) / 3_600_000;
+            excludedHours += truncatedHoursBetween(t.clockIn, t.clockOut);
             return false;
           }
           return true;
         });
 
-        const totalHours = entries.reduce((sum, t) => {
-          const hrs =
-            (new Date(t.clockOut as string).getTime() - new Date(t.clockIn).getTime()) / 3_600_000;
-          return sum + hrs;
-        }, 0);
+        // Same whole-hour rule as the Time Record page: a late clock-in doesn't get paid
+        // from its real/exact minute — it rounds to the nearest hour (30+ min rounds up),
+        // so lateness reduces paid hours instead of being counted at its precise time.
+        const totalHours = entries.reduce(
+          (sum, t) => sum + truncatedHoursBetween(t.clockIn, t.clockOut),
+          0,
+        );
 
         const regularHours = Math.min(totalHours, settings.overtimeThresholdHours);
         const overtimeHours = Math.max(totalHours - settings.overtimeThresholdHours, 0);
