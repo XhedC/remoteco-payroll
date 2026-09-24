@@ -55,6 +55,63 @@ export function truncatedHoursBetween(startIso: string, endIso: string | null): 
   return Math.max(0, (end.getTime() - start.getTime()) / 3_600_000);
 }
 
+function parseHHMM(value: string): number {
+  const [h, m] = value.split(":").map((v) => Number(v) || 0);
+  return h * 60 + m;
+}
+
+/**
+ * Minutes a clock-in is late relative to the employee's designated schedule-in
+ * time (same calendar day as the clock-in). Returns 0 if on time/early or if
+ * no schedule-in is set.
+ */
+export function minutesLate(clockInIso: string, scheduleIn?: string): number {
+  if (!scheduleIn) return 0;
+  const clockIn = new Date(clockInIso);
+  const scheduled = new Date(clockIn);
+  scheduled.setHours(0, 0, 0, 0);
+  scheduled.setMinutes(parseHHMM(scheduleIn));
+  return Math.max(0, Math.round((clockIn.getTime() - scheduled.getTime()) / 60_000));
+}
+
+/**
+ * Minutes clocked out beyond the employee's designated schedule-out time
+ * (paid at the same rate per hour, no overtime multiplier). Anchored to the
+ * clock-in's calendar day, rolling schedule-out to the next day if the
+ * designated shift crosses midnight. Uses the current time for an entry
+ * that's still clocked in. Returns 0 if no schedule-out is set.
+ */
+export function minutesOvertime(
+  clockInIso: string,
+  clockOutIso: string | null,
+  scheduleIn: string | undefined,
+  scheduleOut: string | undefined,
+): number {
+  if (!scheduleOut) return 0;
+  const clockIn = new Date(clockInIso);
+  const clockOut = clockOutIso ? new Date(clockOutIso) : new Date();
+
+  let outMinutes = parseHHMM(scheduleOut);
+  const inMinutes = scheduleIn ? parseHHMM(scheduleIn) : 0;
+  if (outMinutes <= inMinutes) outMinutes += 24 * 60;
+
+  const scheduled = new Date(clockIn);
+  scheduled.setHours(0, 0, 0, 0);
+  scheduled.setMinutes(outMinutes);
+
+  return Math.max(0, Math.round((clockOut.getTime() - scheduled.getTime()) / 60_000));
+}
+
+/** Formats a minute count as "1h 5m" / "20m" / "—" for zero. */
+export function formatMinutes(minutes: number): string {
+  if (minutes <= 0) return "—";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
 export function toDatetimeLocal(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);

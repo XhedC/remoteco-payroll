@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Trash2, X, CalendarRange, ChevronDown } from "lucide-react";
+import { Trash2, X, CalendarRange, ChevronDown, Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,7 +34,15 @@ import {
 import { TimeEntryDialog } from "@/components/time-record/time-entry-dialog";
 import { usePayrollStore } from "@/lib/store";
 import { useOwnerGate } from "@/lib/use-owner-gate";
-import { formatDate, formatTime, truncatedHoursBetween } from "@/lib/format";
+import { getEmployeeOrOwner } from "@/lib/mock-data";
+import {
+  formatDate,
+  formatMinutes,
+  formatTime,
+  minutesLate,
+  minutesOvertime,
+  truncatedHoursBetween,
+} from "@/lib/format";
 
 const ALL_EMPLOYEES = "all";
 
@@ -115,7 +123,7 @@ export default function TimeRecordPage() {
   const subtotals = useMemo(() => {
     const byEmployee = new Map<string, { employeeId: string; name: string; records: number; hours: number }>();
     for (const entry of filteredEntries) {
-      const employee = employees.find((e) => e.id === entry.employeeId);
+      const employee = getEmployeeOrOwner(employees, entry.employeeId);
       const key = entry.employeeId;
       const hours = truncatedHoursBetween(entry.clockIn, entry.clockOut);
       const existing = byEmployee.get(key);
@@ -141,6 +149,43 @@ export default function TimeRecordPage() {
   const handleDelete = async (id: string) => {
     await deleteTimeEntry(id);
     toast.success("Time record removed.");
+  };
+
+  const handleDownload = () => {
+    const header = ["Employee", "Date", "Clock In", "Clock Out", "Hours", "Overtime", "Late", "Note"];
+    const rows = filteredEntries.map((entry) => {
+      const employee = getEmployeeOrOwner(employees, entry.employeeId);
+      const hours = truncatedHoursBetween(entry.clockIn, entry.clockOut);
+      const late = minutesLate(entry.clockIn, employee?.scheduleIn);
+      const overtime = minutesOvertime(
+        entry.clockIn,
+        entry.clockOut,
+        employee?.scheduleIn,
+        employee?.scheduleOut,
+      );
+      return [
+        employee?.name ?? "Unknown",
+        formatDate(entry.clockIn),
+        formatTime(entry.clockIn),
+        entry.clockOut ? formatTime(entry.clockOut) : "In progress",
+        `${Math.round(hours)}h`,
+        formatMinutes(overtime),
+        formatMinutes(late),
+        entry.note ?? "",
+      ];
+    });
+
+    const escapeCsv = (value: string) => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
+    const csv = [header, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const suffix = hasDateFilter ? `_${dateFrom || "start"}_to_${dateTo || "now"}` : "";
+    a.download = `time-records${suffix}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Time records downloaded.");
   };
 
   return (
@@ -188,7 +233,12 @@ export default function TimeRecordPage() {
       <Card>
         <CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle>Time Records</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle>Time Records</CardTitle>
+              <Button variant="outline" size="sm" onClick={handleDownload}>
+                <Download className="size-3.5" /> Download
+              </Button>
+            </div>
             <p className="mt-1 text-sm text-muted-foreground">
               {filteredEntries.length} record(s) • {Math.round(totalHours)} total hours
               {hasDateFilter && (
@@ -275,14 +325,23 @@ export default function TimeRecordPage() {
                 <TableHead>Login (Clock In)</TableHead>
                 <TableHead>Logout (Clock Out)</TableHead>
                 <TableHead>Hours</TableHead>
+                <TableHead>Overtime</TableHead>
+                <TableHead>Late</TableHead>
                 <TableHead>Note</TableHead>
                 {!isSelfServiceOnly && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredEntries.map((entry) => {
-                const employee = employees.find((e) => e.id === entry.employeeId);
+                const employee = getEmployeeOrOwner(employees, entry.employeeId);
                 const hours = truncatedHoursBetween(entry.clockIn, entry.clockOut);
+                const overtime = minutesOvertime(
+                  entry.clockIn,
+                  entry.clockOut,
+                  employee?.scheduleIn,
+                  employee?.scheduleOut,
+                );
+                const late = minutesLate(entry.clockIn, employee?.scheduleIn);
                 return (
                   <TableRow key={entry.id}>
                     <TableCell className="font-medium">{employee?.name ?? "Unknown"}</TableCell>
@@ -296,6 +355,12 @@ export default function TimeRecordPage() {
                       )}
                     </TableCell>
                     <TableCell>{Math.round(hours)}h</TableCell>
+                    <TableCell className={overtime > 0 ? "font-medium text-emerald-600" : "text-muted-foreground"}>
+                      {formatMinutes(overtime)}
+                    </TableCell>
+                    <TableCell className={late > 0 ? "font-medium text-destructive" : "text-muted-foreground"}>
+                      {formatMinutes(late)}
+                    </TableCell>
                     <TableCell className="max-w-[200px] truncate text-muted-foreground">
                       {entry.note || "—"}
                     </TableCell>
@@ -319,7 +384,7 @@ export default function TimeRecordPage() {
               {filteredEntries.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={isSelfServiceOnly ? 6 : 7}
+                    colSpan={isSelfServiceOnly ? 8 : 9}
                     className="py-8 text-center text-muted-foreground"
                   >
                     {hasDateFilter
