@@ -24,6 +24,7 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
+  formatHours,
   formatHoursMinutes,
   formatMinutes,
   formatTime,
@@ -251,9 +252,8 @@ export default function EmployeeHistoryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Pay Period</TableHead>
-                <TableHead>Reg / OT Hours</TableHead>
+                <TableHead>Total Hours</TableHead>
                 <TableHead>Gross</TableHead>
-                <TableHead>Adjustment</TableHead>
                 <TableHead>Net Pay</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
@@ -265,13 +265,9 @@ export default function EmployeeHistoryPage() {
                     {formatDate(run.periodStart)} — {formatDate(run.periodEnd)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {line.regularHours}h / {line.overtimeHours}h
+                    {formatHours(line.regularHours + line.overtimeHours)}
                   </TableCell>
                   <TableCell>{formatCurrency(line.grossPay)}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {line.adjustment >= 0 ? "+" : "-"}
-                    {formatCurrency(Math.abs(line.adjustment))}
-                  </TableCell>
                   <TableCell className="font-medium">{formatCurrency(line.netPay)}</TableCell>
                   <TableCell>
                     <Badge variant={payStatusVariant[line.status]}>{line.status}</Badge>
@@ -280,7 +276,7 @@ export default function EmployeeHistoryPage() {
               ))}
               {payrollHistory.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                     No payroll history yet.
                   </TableCell>
                 </TableRow>
