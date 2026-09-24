@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/table";
 import { usePayrollStore } from "@/lib/store";
 import { useOwnerGate } from "@/lib/use-owner-gate";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { computeEntryMinutes, formatCurrency, formatDate, formatHoursMinutes } from "@/lib/format";
 import { EditPayrollLineDialog } from "./edit-payroll-line-dialog";
 import type { PayPeriodStatus, PayrollRun } from "@/lib/types";
 
@@ -40,6 +40,7 @@ const STATUS_OPTIONS: PayPeriodStatus[] = ["Pending", "On Processing", "Paid", "
 export function PayrollRunSheet({ run }: { run: PayrollRun }) {
   const [open, setOpen] = useState(false);
   const employees = usePayrollStore((s) => s.employees);
+  const timeEntries = usePayrollStore((s) => s.timeEntries);
   const payslipConfirmations = usePayrollStore((s) => s.payslipConfirmations);
   const updatePayrollRunStatus = usePayrollStore((s) => s.updatePayrollRunStatus);
   const updatePayrollLineStatus = usePayrollStore((s) => s.updatePayrollLineStatus);
@@ -52,10 +53,34 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
     "Changing a payroll status affects a financial record. Enter the owner password to continue.",
   );
 
-  const totalNet = run.lines.reduce((sum, l) => sum + l.netPay, 0);
-
   const confirmationFor = (employeeId: string) =>
     payslipConfirmations.find((c) => c.payrollRunId === run.id && c.employeeId === employeeId);
+
+  // Total Hours, Gross, and Net are recomputed here (not read straight off the
+  // stored line) so they always reflect the same accurate, late/overtime-netted
+  // hours shown on Time Record and Employee History, scoped to this run's pay
+  // period. The stored adjustment still applies to Net even though its own
+  // column is hidden.
+  const computedLines = run.lines.map((line) => {
+    const employee = employees.find((e) => e.id === line.employeeId);
+    const periodMinutes = timeEntries
+      .filter(
+        (t) =>
+          t.employeeId === line.employeeId &&
+          t.clockIn.slice(0, 10) >= run.periodStart &&
+          t.clockIn.slice(0, 10) <= run.periodEnd,
+      )
+      .reduce(
+        (sum, t) =>
+          sum + computeEntryMinutes(t.clockIn, t.clockOut, employee?.scheduleIn, employee?.scheduleOut).totalMinutes,
+        0,
+      );
+    const grossPay = (periodMinutes / 60) * line.hourlyRate;
+    const netPay = grossPay + line.adjustment;
+    return { line, employee, periodMinutes, grossPay, netPay };
+  });
+
+  const totalNet = computedLines.reduce((sum, l) => sum + l.netPay, 0);
 
   const handleBulkStatusChange = (nextStatus: string | null) => {
     if (!nextStatus) return;
@@ -131,9 +156,8 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Employee</TableHead>
-                <TableHead>Reg / OT</TableHead>
+                <TableHead>Total Hours</TableHead>
                 <TableHead>Gross</TableHead>
-                <TableHead>Adjustment</TableHead>
                 <TableHead>Net</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Confirmation</TableHead>
@@ -141,22 +165,15 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {run.lines.map((line) => {
-                const employee = employees.find((e) => e.id === line.employeeId);
+              {computedLines.map(({ line, employee, periodMinutes, grossPay, netPay }) => {
                 const employeeName = employee?.name ?? "Unknown";
                 const confirmation = confirmationFor(line.employeeId);
                 return (
                   <TableRow key={line.employeeId}>
                     <TableCell className="font-medium">{employeeName}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {line.regularHours}h / {line.overtimeHours}h
-                    </TableCell>
-                    <TableCell>{formatCurrency(line.grossPay)}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {line.adjustment >= 0 ? "+" : "-"}
-                      {formatCurrency(Math.abs(line.adjustment))}
-                    </TableCell>
-                    <TableCell className="font-medium">{formatCurrency(line.netPay)}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatHoursMinutes(periodMinutes)}</TableCell>
+                    <TableCell>{formatCurrency(grossPay)}</TableCell>
+                    <TableCell className="font-medium">{formatCurrency(netPay)}</TableCell>
                     <TableCell>
                       <Select
                         value={line.status}
