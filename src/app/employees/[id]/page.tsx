@@ -20,12 +20,14 @@ import {
 import { usePayrollStore } from "@/lib/store";
 import { getEmployeeOrOwner } from "@/lib/mock-data";
 import {
+  computeEntryMinutes,
   formatCurrency,
   formatDate,
   formatDateTime,
+  formatHoursMinutes,
+  formatMinutes,
   formatTime,
   initials,
-  truncatedHoursBetween,
 } from "@/lib/format";
 import type { EmployeeStatus, PayPeriodStatus } from "@/lib/types";
 
@@ -58,8 +60,9 @@ export default function EmployeeHistoryPage() {
     .filter((t) => t.employeeId === employeeId)
     .sort((a, b) => new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime());
 
-  const totalHours = entries.reduce(
-    (sum, t) => sum + truncatedHoursBetween(t.clockIn, t.clockOut),
+  const totalMinutesAll = entries.reduce(
+    (sum, t) =>
+      sum + computeEntryMinutes(t.clockIn, t.clockOut, employee?.scheduleIn, employee?.scheduleOut).totalMinutes,
     0,
   );
 
@@ -148,7 +151,7 @@ export default function EmployeeHistoryPage() {
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
         <StatCard
           label="Total Hours Logged"
-          value={`${Math.round(totalHours)}h`}
+          value={formatHoursMinutes(totalMinutesAll)}
           hint={`${entries.length} time records`}
           icon={Clock3}
         />
@@ -178,12 +181,20 @@ export default function EmployeeHistoryPage() {
                 <TableHead>Login (Clock In)</TableHead>
                 <TableHead>Logout (Clock Out)</TableHead>
                 <TableHead>Hours</TableHead>
+                <TableHead>Overtime</TableHead>
+                <TableHead>Late</TableHead>
+                <TableHead>Total Hours</TableHead>
                 <TableHead>Note</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {entries.map((entry) => {
-                const hours = truncatedHoursBetween(entry.clockIn, entry.clockOut);
+                const { hours, late, overtime, totalMinutes } = computeEntryMinutes(
+                  entry.clockIn,
+                  entry.clockOut,
+                  employee.scheduleIn,
+                  employee.scheduleOut,
+                );
                 return (
                   <TableRow key={entry.id}>
                     <TableCell>{formatDate(entry.clockIn)}</TableCell>
@@ -196,6 +207,13 @@ export default function EmployeeHistoryPage() {
                       )}
                     </TableCell>
                     <TableCell>{Math.round(hours)}h</TableCell>
+                    <TableCell className={overtime > 0 ? "font-medium text-emerald-600" : "text-muted-foreground"}>
+                      {formatMinutes(overtime)}
+                    </TableCell>
+                    <TableCell className={late > 0 ? "font-medium text-destructive" : "text-muted-foreground"}>
+                      {formatMinutes(late)}
+                    </TableCell>
+                    <TableCell className="font-medium">{formatHoursMinutes(totalMinutes)}</TableCell>
                     <TableCell className="max-w-[240px] truncate text-muted-foreground">
                       {entry.note || "—"}
                     </TableCell>
@@ -204,7 +222,7 @@ export default function EmployeeHistoryPage() {
               })}
               {entries.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                     No time records yet.
                   </TableCell>
                 </TableRow>
@@ -214,7 +232,8 @@ export default function EmployeeHistoryPage() {
               <TableFooter>
                 <TableRow>
                   <TableCell colSpan={3}>Total</TableCell>
-                  <TableCell>{Math.round(totalHours)}h</TableCell>
+                  <TableCell colSpan={3} className="text-muted-foreground" />
+                  <TableCell>{formatHoursMinutes(totalMinutesAll)}</TableCell>
                   <TableCell />
                 </TableRow>
               </TableFooter>

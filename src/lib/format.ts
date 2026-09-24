@@ -112,6 +112,31 @@ export function formatMinutes(minutes: number): string {
   return `${h}h ${m}m`;
 }
 
+const NET_ADJUSTMENT_MIN_MINUTES = 5;
+
+/**
+ * Computes a time entry's Hours, Overtime, Late minutes, and the resulting
+ * Total Hours (in minutes): late is netted against overtime first
+ * (overtime minus late), and that net adjustment only applies to Total
+ * Hours once it's 5+ minutes in magnitude — below that, Total Hours stays
+ * equal to the base Hours even though Overtime/Late still show their raw
+ * values in their own columns.
+ */
+export function computeEntryMinutes(
+  clockIn: string,
+  clockOut: string | null,
+  scheduleIn: string | undefined,
+  scheduleOut: string | undefined,
+) {
+  const hours = truncatedHoursBetween(clockIn, clockOut);
+  const late = minutesLate(clockIn, scheduleIn);
+  const overtime = minutesOvertime(clockIn, clockOut, scheduleIn, scheduleOut);
+  const net = overtime - late;
+  const creditedNet = Math.abs(net) >= NET_ADJUSTMENT_MIN_MINUTES ? net : 0;
+  const totalMinutes = Math.max(0, hours * 60 + creditedNet);
+  return { hours, late, overtime, totalMinutes };
+}
+
 /** Formats a (possibly zero) minute count as a duration, e.g. "6h 40m" / "8h". */
 export function formatHoursMinutes(totalMinutes: number): string {
   const minutes = Math.max(0, Math.round(totalMinutes));
