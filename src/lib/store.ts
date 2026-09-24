@@ -93,7 +93,7 @@ function mapPayrollLine(row: PayrollLineRow): PayrollLine {
     overtimeHours: Number(row.overtime_hours),
     hourlyRate: Number(row.hourly_rate),
     grossPay: Number(row.gross_pay),
-    deductions: Number(row.deductions),
+    adjustment: Number(row.adjustment),
     netPay: Number(row.net_pay),
     status: row.status,
   };
@@ -227,6 +227,14 @@ interface PayrollStore {
     employeeId: string,
     status: PayPeriodStatus,
   ) => Promise<ActionResult>;
+  /** Manually adjusts an employee's hours/gross pay/adjustment for a run; net pay is always recomputed as grossPay - adjustment. */
+  updatePayrollLine: (
+    runId: string,
+    employeeId: string,
+    patch: Partial<Pick<PayrollLine, "regularHours" | "overtimeHours" | "grossPay" | "adjustment">>,
+  ) => Promise<ActionResult>;
+  /** Removes a single employee's line (and any payslip confirmation) from a run. */
+  deletePayrollLine: (runId: string, employeeId: string) => Promise<ActionResult>;
   /** Employee acknowledges a payslip email ("Confirm" button). */
   confirmPayslip: (confirmationId: string) => Promise<void>;
 
@@ -719,8 +727,8 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
         const overtimeHours = Math.max(totalHours - settings.overtimeThresholdHours, 0);
         const grossPay =
           regularHours * employee.hourlyRate + overtimeHours * employee.hourlyRate * settings.overtimeMultiplier;
-        const deductions = grossPay * settings.defaultDeductionRate;
-        const netPay = grossPay - deductions;
+        const adjustment = grossPay * settings.defaultDeductionRate;
+        const netPay = grossPay - adjustment;
 
         return {
           employeeId: employee.id,
@@ -728,7 +736,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
           overtimeHours: Math.round(overtimeHours * 100) / 100,
           hourlyRate: employee.hourlyRate,
           grossPay: Math.round(grossPay * 100) / 100,
-          deductions: Math.round(deductions * 100) / 100,
+          adjustment: Math.round(adjustment * 100) / 100,
           netPay: Math.round(netPay * 100) / 100,
           status: "Pending" as PayPeriodStatus,
         };
@@ -758,7 +766,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
           overtime_hours: l.overtimeHours,
           hourly_rate: l.hourlyRate,
           gross_pay: l.grossPay,
-          deductions: l.deductions,
+          adjustment: l.adjustment,
           net_pay: l.netPay,
           status: l.status,
         })),
@@ -914,6 +922,106 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
       payslipConfirmations: newConfirmation
         ? [newConfirmation, ...state.payslipConfirmations]
         : state.payslipConfirmations,
+      screenLogs: log ? [log, ...state.screenLogs] : state.screenLogs,
+    }));
+
+    return { success: true };
+  },
+
+  updatePayrollLine: async (runId, employeeId, patch) => {
+    const { payrollRuns, employees } = get();
+    const run = payrollRuns.find((r) => r.id === runId);
+    const line = run?.lines.find((l) => l.employeeId === employeeId);
+    if (!run || !line) return { success: false, error: "Payroll line not found." };
+
+    const regularHours = patch.regularHours ?? line.regularHours;
+    const overtimeHours = patch.overtimeHours ?? line.overtimeHours;
+    const grossPay = patch.grossPay ?? line.grossPay;
+    const adjustment = patch.adjustment ?? line.adjustment;
+    const netPay = Math.round((grossPay - adjustment) * 100) / 100;
+
+    const { error } = await supabase
+      .from("payroll_lines")
+      .update({
+        regular_hours: regularHours,
+        overtime_hours: overtimeHours,
+        gross_pay: grossPay,
+        adjustment,
+        net_pay: netPay,
+      })
+      .eq("payroll_run_id", runId)
+      .eq("employee_id", employeeId);
+    if (error) return { success: false, error: error.message };
+
+    const periodLabel = `${new Date(run.periodStart).toLocaleDateString()} - ${new Date(run.periodEnd).toLocaleDateString()}`;
+    const employeeName =
+      (employeeId === OWNER_EMPLOYEE_ID ? ownerEmployee : employees.find((e) => e.id === employeeId))?.name ??
+      "this employee";
+    const log = await insertLog(
+      get().session?.employeeId ?? "system",
+      "Payroll Run",
+      `Adjusted ${employeeName}'s payroll for ${periodLabel}`,
+    );
+
+    set((state) => ({
+      payrollRuns: state.payrollRuns.map((r) =>
+        r.id !== runId
+          ? r
+          : {
+              ...r,
+              lines: r.lines.map((l) =>
+                l.employeeId === employeeId
+                  ? { ...l, regularHours, overtimeHours, grossPay, adjustment, netPay }
+                  : l,
+              ),
+            },
+      ),
+      screenLogs: log ? [log, ...state.screenLogs] : state.screenLogs,
+    }));
+
+    return { success: true };
+  },
+
+  deletePayrollLine: async (runId, employeeId) => {
+    const { payrollRuns, employees } = get();
+    const run = payrollRuns.find((r) => r.id === runId);
+    const line = run?.lines.find((l) => l.employeeId === employeeId);
+    if (!run || !line) return { success: false, error: "Payroll line not found." };
+
+    const { error } = await supabase
+      .from("payroll_lines")
+      .delete()
+      .eq("payroll_run_id", runId)
+      .eq("employee_id", employeeId);
+    if (error) return { success: false, error: error.message };
+
+    await supabase
+      .from("payslip_confirmations")
+      .delete()
+      .eq("payroll_run_id", runId)
+      .eq("employee_id", employeeId);
+
+    const linesNext = run.lines.filter((l) => l.employeeId !== employeeId);
+    const runStatus = deriveRunStatus(linesNext);
+    await supabase.from("payroll_runs").update({ status: runStatus }).eq("id", runId);
+
+    const periodLabel = `${new Date(run.periodStart).toLocaleDateString()} - ${new Date(run.periodEnd).toLocaleDateString()}`;
+    const employeeName =
+      (employeeId === OWNER_EMPLOYEE_ID ? ownerEmployee : employees.find((e) => e.id === employeeId))?.name ??
+      "this employee";
+    const log = await insertLog(
+      get().session?.employeeId ?? "system",
+      "Payroll Run",
+      `Removed ${employeeName} from payroll for ${periodLabel}`,
+    );
+
+    set((state) => ({
+      payrollRuns: state.payrollRuns.map((r) =>
+        r.id === runId ? { ...r, status: runStatus, lines: linesNext } : r,
+      ),
+      payslipConfirmations: state.payslipConfirmations.filter(
+        (c) => !(c.payrollRunId === runId && c.employeeId === employeeId),
+      ),
       screenLogs: log ? [log, ...state.screenLogs] : state.screenLogs,
     }));
 

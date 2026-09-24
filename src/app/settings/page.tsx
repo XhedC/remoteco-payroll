@@ -144,7 +144,7 @@ export default function SettingsPage() {
                 />
               </div>
               <div className="col-span-2 flex flex-col gap-1.5">
-                <Label htmlFor="s-deduction">Default Deduction Rate (%)</Label>
+                <Label htmlFor="s-deduction">Default Adjustment Rate (%)</Label>
                 <Input
                   id="s-deduction"
                   type="number"

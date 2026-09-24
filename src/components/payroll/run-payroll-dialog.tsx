@@ -72,7 +72,7 @@ export function RunPayrollDialog() {
         <DialogHeader>
           <DialogTitle>Run Payroll</DialogTitle>
           <DialogDescription>
-            Calculates gross pay, overtime, and deductions from clocked hours in this period.
+            Calculates gross pay, overtime, and adjustments from clocked hours in this period.
           </DialogDescription>
         </DialogHeader>
 

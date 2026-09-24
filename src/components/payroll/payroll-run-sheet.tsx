@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, CheckCircle2 } from "lucide-react";
+import { Eye, CheckCircle2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +32,7 @@ import {
 import { usePayrollStore } from "@/lib/store";
 import { useOwnerGate } from "@/lib/use-owner-gate";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { EditPayrollLineDialog } from "./edit-payroll-line-dialog";
 import type { PayPeriodStatus, PayrollRun } from "@/lib/types";
 
 const STATUS_OPTIONS: PayPeriodStatus[] = ["Pending", "On Processing", "Paid", "Unpaid"];
@@ -42,6 +43,11 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
   const payslipConfirmations = usePayrollStore((s) => s.payslipConfirmations);
   const updatePayrollRunStatus = usePayrollStore((s) => s.updatePayrollRunStatus);
   const updatePayrollLineStatus = usePayrollStore((s) => s.updatePayrollLineStatus);
+  const deletePayrollLine = usePayrollStore((s) => s.deletePayrollLine);
+  const currentEmployee = usePayrollStore((s) =>
+    s.session ? s.getEmployee(s.session.employeeId) : undefined,
+  );
+  const canAdjustPayroll = currentEmployee?.role === "Admin";
   const { requestOwnerAuth, ownerDialog } = useOwnerGate(
     "Changing a payroll status affects a financial record. Enter the owner password to continue.",
   );
@@ -76,12 +82,23 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
     });
   };
 
+  const handleDeleteLine = (employeeId: string, employeeName: string) => {
+    requestOwnerAuth(async () => {
+      const result = await deletePayrollLine(run.id, employeeId);
+      if (!result.success) {
+        toast.error(result.error ?? "Unable to remove this employee from the run.");
+        return;
+      }
+      toast.success(`${employeeName} removed from this payroll run.`);
+    });
+  };
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger render={<Button variant="outline" size="sm" />}>
         <Eye className="size-3.5" /> View
       </SheetTrigger>
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
+      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
         <SheetHeader className="gap-3 border-b">
           <SheetTitle>
             {formatDate(run.periodStart)} — {formatDate(run.periodEnd)}
@@ -115,9 +132,12 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
               <TableRow>
                 <TableHead>Employee</TableHead>
                 <TableHead>Reg / OT</TableHead>
+                <TableHead>Gross</TableHead>
+                <TableHead>Adjustment</TableHead>
                 <TableHead>Net</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Confirmation</TableHead>
+                {canAdjustPayroll && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -130,6 +150,11 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
                     <TableCell className="font-medium">{employeeName}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {line.regularHours}h / {line.overtimeHours}h
+                    </TableCell>
+                    <TableCell>{formatCurrency(line.grossPay)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {line.adjustment < 0 ? "+" : "-"}
+                      {formatCurrency(Math.abs(line.adjustment))}
                     </TableCell>
                     <TableCell className="font-medium">{formatCurrency(line.netPay)}</TableCell>
                     <TableCell>
@@ -160,6 +185,20 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
                         <Badge variant="outline">Awaiting confirmation</Badge>
                       )}
                     </TableCell>
+                    {canAdjustPayroll && (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <EditPayrollLineDialog run={run} line={line} employeeName={employeeName} />
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => handleDeleteLine(line.employeeId, employeeName)}
+                          >
+                            <Trash2 className="size-3 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}

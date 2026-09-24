@@ -124,7 +124,7 @@ export type Database = {
       }
       payroll_lines: {
         Row: {
-          deductions: number
+          adjustment: number
           employee_id: string
           gross_pay: number
           hourly_rate: number
@@ -136,7 +136,7 @@ export type Database = {
           status: Database["public"]["Enums"]["pay_period_status"]
         }
         Insert: {
-          deductions?: number
+          adjustment?: number
           employee_id: string
           gross_pay?: number
           hourly_rate?: number
@@ -148,7 +148,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["pay_period_status"]
         }
         Update: {
-          deductions?: number
+          adjustment?: number
           employee_id?: string
           gross_pay?: number
           hourly_rate?: number

@@ -229,7 +229,7 @@ export default function EmployeeHistoryPage() {
                 <TableHead>Pay Period</TableHead>
                 <TableHead>Reg / OT Hours</TableHead>
                 <TableHead>Gross</TableHead>
-                <TableHead>Deductions</TableHead>
+                <TableHead>Adjustment</TableHead>
                 <TableHead>Net Pay</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
@@ -245,7 +245,8 @@ export default function EmployeeHistoryPage() {
                   </TableCell>
                   <TableCell>{formatCurrency(line.grossPay)}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    -{formatCurrency(line.deductions)}
+                    {line.adjustment < 0 ? "+" : "-"}
+                    {formatCurrency(Math.abs(line.adjustment))}
                   </TableCell>
                   <TableCell className="font-medium">{formatCurrency(line.netPay)}</TableCell>
                   <TableCell>
