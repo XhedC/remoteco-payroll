@@ -733,8 +733,9 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
         const overtimeHours = Math.max(totalHours - settings.overtimeThresholdHours, 0);
         const grossPay =
           regularHours * employee.hourlyRate + overtimeHours * employee.hourlyRate * settings.overtimeMultiplier;
-        // Auto-computed adjustment is stored negative: a deduction always subtracts from gross pay.
-        const adjustment = -(grossPay * settings.defaultDeductionRate);
+        // No deduction is applied automatically — it defaults to 0 until an
+        // Admin/Owner explicitly sets one via the Edit Deduction dialog.
+        const adjustment = 0;
         const netPay = grossPay + adjustment;
 
         return {
