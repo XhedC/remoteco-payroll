@@ -39,6 +39,7 @@ function mapEmployee(row: EmployeeRow): Employee {
     id: row.id,
     name: row.name,
     email: row.email,
+    phone: row.phone ?? undefined,
     role: row.role,
     department: row.department,
     title: row.title,
@@ -636,6 +637,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
       body: JSON.stringify({
         name: employee.name,
         email: employee.email,
+        phone: employee.phone,
         role: employee.role,
         department: employee.department,
         title: employee.title,
@@ -669,6 +671,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
       .update({
         ...(patch.name !== undefined && { name: patch.name }),
         ...(patch.email !== undefined && { email: patch.email }),
+        ...(patch.phone !== undefined && { phone: patch.phone || null }),
         ...(patch.role !== undefined && { role: patch.role as Role }),
         ...(patch.department !== undefined && { department: patch.department }),
         ...(patch.title !== undefined && { title: patch.title }),

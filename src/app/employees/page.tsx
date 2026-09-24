@@ -50,6 +50,7 @@ export default function EmployeesPage() {
       (e) =>
         e.name.toLowerCase().includes(q) ||
         e.email.toLowerCase().includes(q) ||
+        (e.phone ?? "").toLowerCase().includes(q) ||
         e.department.toLowerCase().includes(q) ||
         e.title.toLowerCase().includes(q),
     );
@@ -85,7 +86,9 @@ export default function EmployeesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Employee</TableHead>
+                <TableHead>Employee&apos;s Name</TableHead>
+                <TableHead>Phone Number</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
@@ -120,6 +123,8 @@ export default function EmployeesPage() {
                       <ChevronRight className="ml-auto size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/emp-link:opacity-100" />
                     </Link>
                   </TableCell>
+                  <TableCell className="text-muted-foreground">{employee.phone || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{employee.email}</TableCell>
                   <TableCell>{employee.department}</TableCell>
                   <TableCell>{employee.role}</TableCell>
                   <TableCell>
@@ -147,7 +152,7 @@ export default function EmployeesPage() {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                     No employees match your search.
                   </TableCell>
                 </TableRow>

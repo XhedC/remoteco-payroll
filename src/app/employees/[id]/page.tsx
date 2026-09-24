@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Mail, Wallet, Clock3, CalendarDays } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Wallet, Clock3, CalendarDays } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -126,6 +126,11 @@ export default function EmployeeHistoryPage() {
             <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
               <Mail className="size-3" /> {employee.email}
             </p>
+            {employee.phone && (
+              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                <Phone className="size-3" /> {employee.phone}
+              </p>
+            )}
           </div>
           <div className="flex gap-6 text-sm">
             <div>

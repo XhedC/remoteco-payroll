@@ -5,6 +5,7 @@ import type { Role, EmployeeStatus } from "@/lib/types";
 interface CreateEmployeeBody {
   name: string;
   email: string;
+  phone?: string;
   role: Role;
   department: string;
   title: string;
@@ -88,6 +89,7 @@ export async function POST(request: Request) {
       id: created.user.id,
       name: body.name.trim(),
       email,
+      phone: body.phone?.trim() || null,
       role: body.role,
       department: body.department.trim(),
       title: body.title.trim(),

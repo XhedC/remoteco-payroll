@@ -31,6 +31,7 @@ const STATUSES: EmployeeStatus[] = ["Active", "On Leave", "Inactive"];
 const emptyForm = {
   name: "",
   email: "",
+  phone: "",
   role: "Staff" as Role,
   department: "",
   title: "",
@@ -63,6 +64,7 @@ export function EmployeeDialog({ employee }: { employee?: Employee }) {
           ? {
               name: employee.name,
               email: employee.email,
+              phone: employee.phone ?? "",
               role: employee.role,
               department: employee.department,
               title: employee.title,
@@ -110,6 +112,7 @@ export function EmployeeDialog({ employee }: { employee?: Employee }) {
     const payload = {
       name: form.name.trim(),
       email: form.email.trim(),
+      phone: form.phone.trim() || undefined,
       role: form.role,
       department: form.department.trim(),
       title: form.title.trim(),
@@ -224,6 +227,16 @@ export function EmployeeDialog({ employee }: { employee?: Employee }) {
               type="email"
               value={form.email}
               onChange={(e) => set("email", e.target.value)}
+            />
+          </div>
+          <div className="col-span-2 flex flex-col gap-1.5">
+            <Label htmlFor="emp-phone">Phone Number</Label>
+            <Input
+              id="emp-phone"
+              type="tel"
+              value={form.phone}
+              onChange={(e) => set("phone", e.target.value)}
+              placeholder="e.g. +1 555 123 4567"
             />
           </div>
           <div className="flex flex-col gap-1.5">
