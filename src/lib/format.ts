@@ -112,6 +112,8 @@ export function formatMinutes(minutes: number): string {
   return `${h}h ${m}m`;
 }
 
+const STANDARD_WORKDAY_MINUTES = 8 * 60;
+
 /**
  * Computes a time entry's Overtime, Late minutes, and accurate Hours (in
  * minutes). Hours is the real elapsed time between clock-in and clock-out —
@@ -125,6 +127,11 @@ export function formatMinutes(minutes: number): string {
  * Clocking in early doesn't count toward Hours: if clock-in is before the
  * designated schedule-in time, Hours is measured starting from schedule-in
  * instead of the earlier real clock-in time.
+ *
+ * Overtime only counts once Hours reaches a full 8-hour day — clocking out
+ * past the scheduled end time doesn't earn overtime if the day fell short of
+ * 8 hours overall (e.g. a late arrival that leaves slightly after schedule
+ * but still under 8 hours worked).
  */
 export function computeEntryMinutes(
   clockIn: string,
@@ -133,7 +140,7 @@ export function computeEntryMinutes(
   scheduleOut: string | undefined,
 ) {
   const late = minutesLate(clockIn, scheduleIn);
-  const overtime = minutesOvertime(clockIn, clockOut, scheduleIn, scheduleOut);
+  let overtime = minutesOvertime(clockIn, clockOut, scheduleIn, scheduleOut);
   const end = clockOut ? new Date(clockOut) : new Date();
 
   let start = new Date(clockIn);
@@ -145,6 +152,7 @@ export function computeEntryMinutes(
   }
 
   const totalMinutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60_000));
+  if (totalMinutes < STANDARD_WORKDAY_MINUTES) overtime = 0;
   return { late, overtime, totalMinutes };
 }
 
