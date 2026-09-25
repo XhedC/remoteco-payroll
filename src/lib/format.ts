@@ -114,13 +114,17 @@ export function formatMinutes(minutes: number): string {
 
 /**
  * Computes a time entry's Overtime, Late minutes, and accurate Hours (in
- * minutes). Hours is simply the real elapsed time between clock-in and
- * clock-out — it already reflects a late start (shorter) or an overtime
- * finish (longer) on its own, since those are measured from the same clock
- * times. Overtime/Late are reported separately for context but are NOT
- * additionally added to or subtracted from Hours, which would double-count
- * them (e.g. clock in 9:00 vs a 8:00 schedule, clock out 16:00: Hours = 7,
- * Overtime = 0, Late = 1h — not 7 - 1 = 6).
+ * minutes). Hours is the real elapsed time between clock-in and clock-out —
+ * it already reflects a late start (shorter) or an overtime finish (longer)
+ * on its own, since those are measured from the same clock times. Overtime/
+ * Late are reported separately for context but are NOT additionally added
+ * to or subtracted from Hours, which would double-count them (e.g. clock in
+ * 9:00 vs an 8:00 schedule, clock out 16:00: Hours = 7, Overtime = 0, Late =
+ * 1h — not 7 - 1 = 6).
+ *
+ * Clocking in early doesn't count toward Hours: if clock-in is before the
+ * designated schedule-in time, Hours is measured starting from schedule-in
+ * instead of the earlier real clock-in time.
  */
 export function computeEntryMinutes(
   clockIn: string,
@@ -131,7 +135,16 @@ export function computeEntryMinutes(
   const late = minutesLate(clockIn, scheduleIn);
   const overtime = minutesOvertime(clockIn, clockOut, scheduleIn, scheduleOut);
   const end = clockOut ? new Date(clockOut) : new Date();
-  const totalMinutes = Math.max(0, Math.round((end.getTime() - new Date(clockIn).getTime()) / 60_000));
+
+  let start = new Date(clockIn);
+  if (scheduleIn) {
+    const scheduledStart = new Date(clockIn);
+    scheduledStart.setHours(0, 0, 0, 0);
+    scheduledStart.setMinutes(parseHHMM(scheduleIn));
+    if (start < scheduledStart) start = scheduledStart;
+  }
+
+  const totalMinutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60_000));
   return { late, overtime, totalMinutes };
 }
 
