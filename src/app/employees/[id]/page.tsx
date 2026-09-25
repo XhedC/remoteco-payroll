@@ -73,18 +73,19 @@ export default function EmployeeHistoryPage() {
       if (!line) return [];
       // Same shared, accurate computation as the Payroll run sheet: Total
       // Hours from actual time entries in this run's pay period, Gross from
-      // the employee's current rate, Net from the stored adjustment.
-      const { periodMinutes, grossPay, netPay } = computePayrollLineAccurate(
+      // the employee's current rate, Addition/Deduction/Net from the stored line.
+      const { periodMinutes, grossPay, addition, deduction, netPay } = computePayrollLineAccurate(
         run.periodStart,
         run.periodEnd,
         employeeId,
         employee?.hourlyRate ?? line.hourlyRate,
         line.adjustment,
+        line.addition,
         timeEntries,
         employee?.scheduleIn,
         employee?.scheduleOut,
       );
-      return [{ run, line, periodMinutes, grossPay, netPay }];
+      return [{ run, line, periodMinutes, grossPay, addition, deduction, netPay }];
     })
     .sort((a, b) => new Date(b.run.periodStart).getTime() - new Date(a.run.periodStart).getTime());
 
@@ -265,12 +266,14 @@ export default function EmployeeHistoryPage() {
                 <TableHead>Pay Period</TableHead>
                 <TableHead>Total Hours</TableHead>
                 <TableHead>Gross</TableHead>
+                <TableHead>Additions</TableHead>
+                <TableHead>Deduction</TableHead>
                 <TableHead>Net Pay</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payrollHistory.map(({ run, line, periodMinutes, grossPay, netPay }) => (
+              {payrollHistory.map(({ run, line, periodMinutes, grossPay, addition, deduction, netPay }) => (
                 <TableRow key={run.id}>
                   <TableCell className="font-medium">
                     {formatDate(run.periodStart)} — {formatDate(run.periodEnd)}
@@ -279,6 +282,8 @@ export default function EmployeeHistoryPage() {
                     {formatHoursMinutes(periodMinutes)}
                   </TableCell>
                   <TableCell>{formatCurrency(grossPay)}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatCurrency(addition)}</TableCell>
+                  <TableCell className="text-muted-foreground">{formatCurrency(deduction)}</TableCell>
                   <TableCell className="font-medium">{formatCurrency(netPay)}</TableCell>
                   <TableCell>
                     <Badge variant={payStatusVariant[line.status]}>{line.status}</Badge>
@@ -287,7 +292,7 @@ export default function EmployeeHistoryPage() {
               ))}
               {payrollHistory.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                     No payroll history yet.
                   </TableCell>
                 </TableRow>

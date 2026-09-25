@@ -152,11 +152,11 @@ export function computeEntryMinutes(
  * Computes a payroll line's accurate financials for one employee over one
  * pay period: Total Hours (minutes) from the employee's actual time entries
  * within [periodStart, periodEnd] (via computeEntryMinutes), Gross Pay as
- * Total Hours x rate, and Net Pay/Deduction from the line's stored
- * adjustment (Gross - Deduction = Net always holds). This is the single
- * source of truth used everywhere a payroll line's numbers are displayed,
- * so a rate or schedule change is reflected consistently across the app —
- * it does not touch what's actually stored/paid.
+ * Total Hours x rate, and Net Pay from Gross + Addition + Deduction (Gross +
+ * Addition - Deduction = Net always holds). This is the single source of
+ * truth used everywhere a payroll line's numbers are displayed, so a rate or
+ * schedule change is reflected consistently across the app — it does not
+ * touch what's actually stored/paid.
  */
 export function computePayrollLineAccurate(
   periodStart: string,
@@ -164,6 +164,7 @@ export function computePayrollLineAccurate(
   employeeId: string,
   hourlyRate: number,
   adjustment: number,
+  addition: number,
   timeEntries: { employeeId: string; clockIn: string; clockOut: string | null }[],
   scheduleIn: string | undefined,
   scheduleOut: string | undefined,
@@ -177,9 +178,9 @@ export function computePayrollLineAccurate(
     )
     .reduce((sum, t) => sum + computeEntryMinutes(t.clockIn, t.clockOut, scheduleIn, scheduleOut).totalMinutes, 0);
   const grossPay = (periodMinutes / 60) * hourlyRate;
-  const netPay = grossPay + adjustment;
-  const deduction = grossPay - netPay;
-  return { periodMinutes, grossPay, deduction, netPay };
+  const netPay = grossPay + addition + adjustment;
+  const deduction = -adjustment;
+  return { periodMinutes, grossPay, addition, deduction, netPay };
 }
 
 /** Formats a (possibly zero) minute count as a duration, e.g. "6h 40m" / "8h". */

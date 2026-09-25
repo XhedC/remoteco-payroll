@@ -62,17 +62,18 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
   // accurate, late/overtime-netted hours shown everywhere else in the app.
   const computedLines = run.lines.map((line) => {
     const employee = employees.find((e) => e.id === line.employeeId);
-    const { periodMinutes, grossPay, deduction, netPay } = computePayrollLineAccurate(
+    const { periodMinutes, grossPay, addition, deduction, netPay } = computePayrollLineAccurate(
       run.periodStart,
       run.periodEnd,
       line.employeeId,
       employee?.hourlyRate ?? line.hourlyRate,
       line.adjustment,
+      line.addition,
       timeEntries,
       employee?.scheduleIn,
       employee?.scheduleOut,
     );
-    return { line, employee, periodMinutes, grossPay, deduction, netPay };
+    return { line, employee, periodMinutes, grossPay, addition, deduction, netPay };
   });
 
   const totalNet = computedLines.reduce((sum, l) => sum + l.netPay, 0);
@@ -153,6 +154,7 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
                 <TableHead>Employee</TableHead>
                 <TableHead>Total Hours</TableHead>
                 <TableHead>Gross</TableHead>
+                <TableHead>Additions</TableHead>
                 <TableHead>Deduction</TableHead>
                 <TableHead>Net</TableHead>
                 <TableHead>Status</TableHead>
@@ -161,7 +163,7 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {computedLines.map(({ line, employee, periodMinutes, grossPay, deduction, netPay }) => {
+              {computedLines.map(({ line, employee, periodMinutes, grossPay, addition, deduction, netPay }) => {
                 const employeeName = employee?.name ?? "Unknown";
                 const confirmation = confirmationFor(line.employeeId);
                 return (
@@ -169,6 +171,7 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
                     <TableCell className="font-medium">{employeeName}</TableCell>
                     <TableCell className="text-muted-foreground">{formatHoursMinutes(periodMinutes)}</TableCell>
                     <TableCell>{formatCurrency(grossPay)}</TableCell>
+                    <TableCell className="text-muted-foreground">{formatCurrency(addition)}</TableCell>
                     <TableCell className="text-muted-foreground">{formatCurrency(deduction)}</TableCell>
                     <TableCell className="font-medium">{formatCurrency(netPay)}</TableCell>
                     <TableCell>

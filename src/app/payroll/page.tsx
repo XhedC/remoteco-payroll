@@ -74,6 +74,7 @@ export default function PayrollPage() {
         employeeId,
         employee?.hourlyRate ?? line.hourlyRate,
         line.adjustment,
+        line.addition,
         timeEntries,
         employee?.scheduleIn,
         employee?.scheduleOut,
@@ -166,6 +167,7 @@ export default function PayrollPage() {
                   <TableHead>Pay Period</TableHead>
                   <TableHead>Total Hours</TableHead>
                   <TableHead>Gross</TableHead>
+                  <TableHead>Additions</TableHead>
                   <TableHead>Deduction</TableHead>
                   <TableHead>Net Pay</TableHead>
                   <TableHead>Status</TableHead>
@@ -183,6 +185,7 @@ export default function PayrollPage() {
                         {formatHoursMinutes(accurate.periodMinutes)}
                       </TableCell>
                       <TableCell>{formatCurrency(accurate.grossPay)}</TableCell>
+                      <TableCell className="text-muted-foreground">{formatCurrency(accurate.addition)}</TableCell>
                       <TableCell className="text-muted-foreground">{formatCurrency(accurate.deduction)}</TableCell>
                       <TableCell className="font-medium">{formatCurrency(accurate.netPay)}</TableCell>
                       <TableCell>
@@ -193,7 +196,7 @@ export default function PayrollPage() {
                 })}
                 {scopedRuns.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                       No payroll history for {selectedEmployee.name} yet.
                     </TableCell>
                   </TableRow>

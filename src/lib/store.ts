@@ -96,6 +96,7 @@ function mapPayrollLine(row: PayrollLineRow): PayrollLine {
     hourlyRate: Number(row.hourly_rate),
     grossPay: Number(row.gross_pay),
     adjustment: Number(row.adjustment),
+    addition: Number(row.addition),
     netPay: Number(row.net_pay),
     status: row.status,
   };
@@ -229,11 +230,11 @@ interface PayrollStore {
     employeeId: string,
     status: PayPeriodStatus,
   ) => Promise<ActionResult>;
-  /** Manually adjusts an employee's hours/gross pay/adjustment for a run; net pay is always recomputed as grossPay - adjustment. */
+  /** Manually adjusts an employee's hours/gross pay/deduction/addition for a run; net pay is always recomputed as grossPay + addition + adjustment. */
   updatePayrollLine: (
     runId: string,
     employeeId: string,
-    patch: Partial<Pick<PayrollLine, "regularHours" | "overtimeHours" | "grossPay" | "adjustment">>,
+    patch: Partial<Pick<PayrollLine, "regularHours" | "overtimeHours" | "grossPay" | "adjustment" | "addition">>,
   ) => Promise<ActionResult>;
   /** Removes a single employee's line (and any payslip confirmation) from a run. */
   deletePayrollLine: (runId: string, employeeId: string) => Promise<ActionResult>;
@@ -733,10 +734,11 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
         const overtimeHours = Math.max(totalHours - settings.overtimeThresholdHours, 0);
         const grossPay =
           regularHours * employee.hourlyRate + overtimeHours * employee.hourlyRate * settings.overtimeMultiplier;
-        // No deduction is applied automatically — it defaults to 0 until an
-        // Admin/Owner explicitly sets one via the Edit Deduction dialog.
+        // No deduction or addition is applied automatically — both default
+        // to 0 until an Admin/Owner explicitly sets one via Edit Deduction.
         const adjustment = 0;
-        const netPay = grossPay + adjustment;
+        const addition = 0;
+        const netPay = grossPay + addition + adjustment;
 
         return {
           employeeId: employee.id,
@@ -745,6 +747,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
           hourlyRate: employee.hourlyRate,
           grossPay: Math.round(grossPay * 100) / 100,
           adjustment: Math.round(adjustment * 100) / 100,
+          addition: Math.round(addition * 100) / 100,
           netPay: Math.round(netPay * 100) / 100,
           status: "Pending" as PayPeriodStatus,
         };
@@ -775,6 +778,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
           hourly_rate: l.hourlyRate,
           gross_pay: l.grossPay,
           adjustment: l.adjustment,
+          addition: l.addition,
           net_pay: l.netPay,
           status: l.status,
         })),
@@ -946,7 +950,8 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
     const overtimeHours = patch.overtimeHours ?? line.overtimeHours;
     const grossPay = patch.grossPay ?? line.grossPay;
     const adjustment = patch.adjustment ?? line.adjustment;
-    const netPay = Math.round((grossPay + adjustment) * 100) / 100;
+    const addition = patch.addition ?? line.addition;
+    const netPay = Math.round((grossPay + addition + adjustment) * 100) / 100;
 
     const { error } = await supabase
       .from("payroll_lines")
@@ -955,6 +960,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
         overtime_hours: overtimeHours,
         gross_pay: grossPay,
         adjustment,
+        addition,
         net_pay: netPay,
       })
       .eq("payroll_run_id", runId)
@@ -979,7 +985,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
               ...r,
               lines: r.lines.map((l) =>
                 l.employeeId === employeeId
-                  ? { ...l, regularHours, overtimeHours, grossPay, adjustment, netPay }
+                  ? { ...l, regularHours, overtimeHours, grossPay, adjustment, addition, netPay }
                   : l,
               ),
             },

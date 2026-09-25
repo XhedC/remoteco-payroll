@@ -42,6 +42,7 @@ export default function DashboardPage() {
             l.employeeId,
             employee?.hourlyRate ?? l.hourlyRate,
             l.adjustment,
+            l.addition,
             timeEntries,
             employee?.scheduleIn,
             employee?.scheduleOut,
