@@ -162,7 +162,7 @@ export default function TimeRecordPage() {
     const header = ["Employee", "Date", "Clock In", "Clock Out", "Hours", "Overtime", "Late", "Note"];
     const rows = filteredEntries.map((entry) => {
       const employee = getEmployeeOrOwner(employees, entry.employeeId);
-      const { hours, late, overtime } = computeEntryMinutes(
+      const { late, overtime, totalMinutes } = computeEntryMinutes(
         entry.clockIn,
         entry.clockOut,
         employee?.scheduleIn,
@@ -173,7 +173,7 @@ export default function TimeRecordPage() {
         formatDate(entry.clockIn),
         formatTime(entry.clockIn),
         entry.clockOut ? formatTime(entry.clockOut) : "In progress",
-        `${Math.round(hours)}h`,
+        formatHoursMinutes(totalMinutes),
         formatMinutes(overtime),
         formatMinutes(late),
         entry.note ?? "",
@@ -337,7 +337,7 @@ export default function TimeRecordPage() {
             <TableBody>
               {filteredEntries.map((entry) => {
                 const employee = getEmployeeOrOwner(employees, entry.employeeId);
-                const { hours, late, overtime } = computeEntryMinutes(
+                const { late, overtime, totalMinutes } = computeEntryMinutes(
                   entry.clockIn,
                   entry.clockOut,
                   employee?.scheduleIn,
@@ -355,7 +355,7 @@ export default function TimeRecordPage() {
                         <Badge variant="secondary">In progress</Badge>
                       )}
                     </TableCell>
-                    <TableCell>{Math.round(hours)}h</TableCell>
+                    <TableCell className="font-medium">{formatHoursMinutes(totalMinutes)}</TableCell>
                     <TableCell className={overtime > 0 ? "font-medium text-emerald-600" : "text-muted-foreground"}>
                       {formatMinutes(overtime)}
                     </TableCell>
