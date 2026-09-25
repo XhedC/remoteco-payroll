@@ -24,12 +24,11 @@ import type { CompanySettings } from "@/lib/types";
 export default function SettingsPage() {
   const settings = usePayrollStore((s) => s.settings);
   const updateSettings = usePayrollStore((s) => s.updateSettings);
+  // Seeded once from the store on mount. Realtime syncs elsewhere in the app
+  // replace `settings` with a new object on every unrelated table change, so
+  // resyncing on every reference change would silently overwrite an admin's
+  // in-progress, unsaved edits here.
   const [form, setForm] = useState<CompanySettings>(settings);
-  const [syncedSettings, setSyncedSettings] = useState(settings);
-  if (settings !== syncedSettings) {
-    setSyncedSettings(settings);
-    setForm(settings);
-  }
 
   const { requestOwnerAuth, ownerDialog } = useOwnerGate(
     "Saving changes updates company-wide settings. Enter the owner password to continue.",
@@ -39,6 +38,22 @@ export default function SettingsPage() {
     setForm((f) => ({ ...f, [key]: value }));
 
   const saveSettings = async () => {
+    if (!form.standardWorkHours || form.standardWorkHours < 1) {
+      toast.error("Standard Work Hours / Day must be at least 1.");
+      return;
+    }
+    if (!form.overtimeThresholdHours || form.overtimeThresholdHours < 1) {
+      toast.error("Overtime Threshold must be at least 1 hour — clearing this field to 0 would treat every hour as overtime.");
+      return;
+    }
+    if (!form.overtimeMultiplier || form.overtimeMultiplier < 1) {
+      toast.error("Overtime Multiplier must be at least 1 — a multiplier of 0 would pay overtime hours nothing.");
+      return;
+    }
+    if (form.defaultDeductionRate < 0 || form.defaultDeductionRate > 1) {
+      toast.error("Default Adjustment Rate must be between 0% and 100%.");
+      return;
+    }
     await updateSettings(form);
     toast.success("Settings saved.");
   };
