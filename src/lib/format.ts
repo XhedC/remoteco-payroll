@@ -112,15 +112,15 @@ export function formatMinutes(minutes: number): string {
   return `${h}h ${m}m`;
 }
 
-const NET_ADJUSTMENT_MIN_MINUTES = 5;
-
 /**
- * Computes a time entry's Hours, Overtime, Late minutes, and the resulting
- * Total Hours (in minutes): late is netted against overtime first
- * (overtime minus late), and that net adjustment only applies to Total
- * Hours once it's 5+ minutes in magnitude — below that, Total Hours stays
- * equal to the base Hours even though Overtime/Late still show their raw
- * values in their own columns.
+ * Computes a time entry's Overtime, Late minutes, and accurate Hours (in
+ * minutes). Hours is simply the real elapsed time between clock-in and
+ * clock-out — it already reflects a late start (shorter) or an overtime
+ * finish (longer) on its own, since those are measured from the same clock
+ * times. Overtime/Late are reported separately for context but are NOT
+ * additionally added to or subtracted from Hours, which would double-count
+ * them (e.g. clock in 9:00 vs a 8:00 schedule, clock out 16:00: Hours = 7,
+ * Overtime = 0, Late = 1h — not 7 - 1 = 6).
  */
 export function computeEntryMinutes(
   clockIn: string,
@@ -128,13 +128,11 @@ export function computeEntryMinutes(
   scheduleIn: string | undefined,
   scheduleOut: string | undefined,
 ) {
-  const hours = truncatedHoursBetween(clockIn, clockOut);
   const late = minutesLate(clockIn, scheduleIn);
   const overtime = minutesOvertime(clockIn, clockOut, scheduleIn, scheduleOut);
-  const net = overtime - late;
-  const creditedNet = Math.abs(net) >= NET_ADJUSTMENT_MIN_MINUTES ? net : 0;
-  const totalMinutes = Math.max(0, hours * 60 + creditedNet);
-  return { hours, late, overtime, totalMinutes };
+  const end = clockOut ? new Date(clockOut) : new Date();
+  const totalMinutes = Math.max(0, Math.round((end.getTime() - new Date(clockIn).getTime()) / 60_000));
+  return { late, overtime, totalMinutes };
 }
 
 /**

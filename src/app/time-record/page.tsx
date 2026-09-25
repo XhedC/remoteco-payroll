@@ -200,8 +200,8 @@ export default function TimeRecordPage() {
           <CardHeader>
             <CardTitle>Subtotal by Employee</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Total Hours per employee for the records shown below: base hours (clock-in rounds to
-              the nearest hour, clock-out rounds down), minus late minutes, plus overtime minutes.
+              Hours totaled per employee for the records shown below, based on each entry&apos;s
+              actual clock-in and clock-out time.
             </p>
           </CardHeader>
           <CardContent>

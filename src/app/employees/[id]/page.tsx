@@ -198,13 +198,12 @@ export default function EmployeeHistoryPage() {
                 <TableHead>Hours</TableHead>
                 <TableHead>Overtime</TableHead>
                 <TableHead>Late</TableHead>
-                <TableHead>Total Hours</TableHead>
                 <TableHead>Note</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {entries.map((entry) => {
-                const { hours, late, overtime, totalMinutes } = computeEntryMinutes(
+                const { late, overtime, totalMinutes } = computeEntryMinutes(
                   entry.clockIn,
                   entry.clockOut,
                   employee.scheduleIn,
@@ -221,14 +220,13 @@ export default function EmployeeHistoryPage() {
                         <Badge variant="secondary">In progress</Badge>
                       )}
                     </TableCell>
-                    <TableCell>{Math.round(hours)}h</TableCell>
+                    <TableCell className="font-medium">{formatHoursMinutes(totalMinutes)}</TableCell>
                     <TableCell className={overtime > 0 ? "font-medium text-emerald-600" : "text-muted-foreground"}>
                       {formatMinutes(overtime)}
                     </TableCell>
                     <TableCell className={late > 0 ? "font-medium text-destructive" : "text-muted-foreground"}>
                       {formatMinutes(late)}
                     </TableCell>
-                    <TableCell className="font-medium">{formatHoursMinutes(totalMinutes)}</TableCell>
                     <TableCell className="max-w-[240px] truncate text-muted-foreground">
                       {entry.note || "—"}
                     </TableCell>
@@ -237,7 +235,7 @@ export default function EmployeeHistoryPage() {
               })}
               {entries.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                     No time records yet.
                   </TableCell>
                 </TableRow>
@@ -247,9 +245,8 @@ export default function EmployeeHistoryPage() {
               <TableFooter>
                 <TableRow>
                   <TableCell colSpan={3}>Total</TableCell>
-                  <TableCell colSpan={3} className="text-muted-foreground" />
                   <TableCell>{formatHoursMinutes(totalMinutesAll)}</TableCell>
-                  <TableCell />
+                  <TableCell colSpan={3} className="text-muted-foreground" />
                 </TableRow>
               </TableFooter>
             )}
