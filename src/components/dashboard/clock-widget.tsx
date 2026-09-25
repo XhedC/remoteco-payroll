@@ -52,14 +52,14 @@ export function ClockWidget() {
 
   const handleClockIn = async () => {
     const sharing = await requestScreenShare();
-    await clockIn(currentUserId);
-    if (sharing) {
-      toast.success(`Clocked in as ${employee?.name ?? "employee"}. Screen sharing is active.`);
-    } else {
-      toast.warning(
-        `Clocked in as ${employee?.name ?? "employee"}, but screen sharing wasn't granted — periodic screenshots won't be captured this shift.`,
+    if (!sharing) {
+      toast.error(
+        "Screen sharing is required to clock in. Please allow screen sharing when prompted, then try again.",
       );
+      return;
     }
+    await clockIn(currentUserId);
+    toast.success(`Clocked in as ${employee?.name ?? "employee"}. Screen sharing is active.`);
   };
 
   const handleClockOut = async () => {
