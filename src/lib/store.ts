@@ -238,6 +238,8 @@ interface PayrollStore {
   ) => Promise<ActionResult>;
   /** Removes a single employee's line (and any payslip confirmation) from a run. */
   deletePayrollLine: (runId: string, employeeId: string) => Promise<ActionResult>;
+  /** Deletes an entire payroll run, along with all of its lines and payslip confirmations. */
+  deletePayrollRun: (runId: string) => Promise<ActionResult>;
   /** Employee acknowledges a payslip email ("Confirm" button). */
   confirmPayslip: (confirmationId: string) => Promise<void>;
 
@@ -1036,6 +1038,31 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
       payslipConfirmations: state.payslipConfirmations.filter(
         (c) => !(c.payrollRunId === runId && c.employeeId === employeeId),
       ),
+      screenLogs: log ? [log, ...state.screenLogs] : state.screenLogs,
+    }));
+
+    return { success: true };
+  },
+
+  deletePayrollRun: async (runId) => {
+    const { payrollRuns } = get();
+    const run = payrollRuns.find((r) => r.id === runId);
+    if (!run) return { success: false, error: "Payroll run not found." };
+
+    // payroll_lines and payslip_confirmations cascade-delete with the run.
+    const { error } = await supabase.from("payroll_runs").delete().eq("id", runId);
+    if (error) return { success: false, error: error.message };
+
+    const periodLabel = `${new Date(run.periodStart).toLocaleDateString()} - ${new Date(run.periodEnd).toLocaleDateString()}`;
+    const log = await insertLog(
+      get().session?.employeeId ?? "system",
+      "Payroll Run",
+      `Deleted payroll run for ${periodLabel}`,
+    );
+
+    set((state) => ({
+      payrollRuns: state.payrollRuns.filter((r) => r.id !== runId),
+      payslipConfirmations: state.payslipConfirmations.filter((c) => c.payrollRunId !== runId),
       screenLogs: log ? [log, ...state.screenLogs] : state.screenLogs,
     }));
 

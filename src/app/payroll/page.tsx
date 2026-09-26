@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -23,8 +25,9 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { RunPayrollDialog } from "@/components/payroll/run-payroll-dialog";
 import { PayrollRunSheet } from "@/components/payroll/payroll-run-sheet";
 import { usePayrollStore } from "@/lib/store";
+import { useOwnerGate } from "@/lib/use-owner-gate";
 import { computePayrollLineAccurate, formatCurrency, formatDate, formatHoursMinutes } from "@/lib/format";
-import { Wallet, Users2, Clock4, DollarSign } from "lucide-react";
+import { Wallet, Users2, Clock4, DollarSign, Trash2 } from "lucide-react";
 import type { PayPeriodStatus } from "@/lib/types";
 
 const ALL_EMPLOYEES = "all";
@@ -40,11 +43,27 @@ export default function PayrollPage() {
   const payrollRuns = usePayrollStore((s) => s.payrollRuns);
   const employees = usePayrollStore((s) => s.employees);
   const timeEntries = usePayrollStore((s) => s.timeEntries);
+  const deletePayrollRun = usePayrollStore((s) => s.deletePayrollRun);
   const currentEmployee = usePayrollStore((s) =>
     s.session ? s.getEmployee(s.session.employeeId) : undefined,
   );
   const isSelfServiceOnly = !!currentEmployee && currentEmployee.role !== "Admin" && currentEmployee.role !== "Manager";
+  const canAdjustPayroll = currentEmployee?.role === "Admin";
   const [employeeFilter, setEmployeeFilter] = useState(ALL_EMPLOYEES);
+  const { requestOwnerAuth, ownerDialog } = useOwnerGate(
+    "Deleting a payroll run permanently removes it and every employee's line within it. Enter the owner password to continue.",
+  );
+
+  const handleDeleteRun = (runId: string, periodLabel: string) => {
+    requestOwnerAuth(async () => {
+      const result = await deletePayrollRun(runId);
+      if (!result.success) {
+        toast.error(result.error ?? "Unable to delete this payroll run.");
+        return;
+      }
+      toast.success(`Payroll run for ${periodLabel} deleted.`);
+    });
+  };
 
   const effectiveFilter = isSelfServiceOnly ? (currentEmployee?.id ?? ALL_EMPLOYEES) : employeeFilter;
   const selectedEmployee =
@@ -235,7 +254,23 @@ export default function PayrollPage() {
                         <Badge variant={statusVariant[run.status]}>{run.status}</Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <PayrollRunSheet run={run} />
+                        <div className="flex justify-end gap-1">
+                          <PayrollRunSheet run={run} />
+                          {canAdjustPayroll && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() =>
+                                handleDeleteRun(
+                                  run.id,
+                                  `${formatDate(run.periodStart)} — ${formatDate(run.periodEnd)}`,
+                                )
+                              }
+                            >
+                              <Trash2 className="size-3.5 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -252,6 +287,7 @@ export default function PayrollPage() {
           )}
         </CardContent>
       </Card>
+      {ownerDialog}
     </AppShell>
   );
 }
