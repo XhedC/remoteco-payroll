@@ -452,6 +452,11 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
   logout: async () => {
     const employeeId = get().session?.employeeId;
     if (employeeId) {
+      // Logging out shouldn't leave a shift running — clock out first if
+      // one's active, same as if they'd clicked "Clock Out" themselves.
+      if (get().isClockedIn(employeeId)) {
+        await get().clockOut(employeeId);
+      }
       await insertLog(employeeId, "Logout", "Signed out");
     }
     get().unsubscribeRealtime();
