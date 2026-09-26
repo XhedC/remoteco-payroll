@@ -77,6 +77,11 @@ function ScreenLogsPageContent() {
   const screenLogs = usePayrollStore((s) => s.screenLogs);
   const screenshots = usePayrollStore((s) => s.screenshots);
   const session = usePayrollStore((s) => s.session);
+  const currentEmployee = usePayrollStore((s) =>
+    session ? s.getEmployee(session.employeeId) : undefined,
+  );
+  const isSelfServiceOnly =
+    !!currentEmployee && currentEmployee.role !== "Admin" && currentEmployee.role !== "Manager";
   const activeEntry = usePayrollStore((s) =>
     session ? s.activeEntry(session.employeeId) : undefined,
   );
@@ -96,9 +101,17 @@ function ScreenLogsPageContent() {
     () => searchParams.get("employee") ?? ALL,
   );
 
+  // Self-service employees only ever see their own activity/screenshots —
+  // other employees' records are blocked, regardless of what these filter
+  // values are set to.
+  const effectiveLogFilter = isSelfServiceOnly ? (currentEmployee?.id ?? ALL) : employeeFilter;
+  const effectiveScreenshotFilter = isSelfServiceOnly
+    ? (currentEmployee?.id ?? ALL)
+    : screenshotEmployeeFilter;
+
   const filtered = useMemo(() => {
     return screenLogs.filter((log) => {
-      if (employeeFilter !== ALL && log.employeeId !== employeeFilter) return false;
+      if (effectiveLogFilter !== ALL && log.employeeId !== effectiveLogFilter) return false;
       if (actionFilter !== ALL && log.action !== actionFilter) return false;
       if (query.trim()) {
         const q = query.toLowerCase();
@@ -109,13 +122,13 @@ function ScreenLogsPageContent() {
       }
       return true;
     });
-  }, [screenLogs, employeeFilter, actionFilter, query, employees]);
+  }, [screenLogs, effectiveLogFilter, actionFilter, query, employees]);
 
   const filteredScreenshots = useMemo(() => {
     return screenshots
-      .filter((s) => screenshotEmployeeFilter === ALL || s.employeeId === screenshotEmployeeFilter)
+      .filter((s) => effectiveScreenshotFilter === ALL || s.employeeId === effectiveScreenshotFilter)
       .sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime());
-  }, [screenshots, screenshotEmployeeFilter]);
+  }, [screenshots, effectiveScreenshotFilter]);
 
   const handleCaptureNow = async () => {
     if (!session || !activeEntry) return;
@@ -159,23 +172,25 @@ function ScreenLogsPageContent() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={screenshotEmployeeFilter} onValueChange={(v) => setScreenshotEmployeeFilter(v ?? ALL)}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue>
-                  {(value: string) =>
-                    value === ALL ? "All employees" : (employees.find((e) => e.id === value)?.name ?? value)
-                  }
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All employees</SelectItem>
-                {employees.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!isSelfServiceOnly && (
+              <Select value={screenshotEmployeeFilter} onValueChange={(v) => setScreenshotEmployeeFilter(v ?? ALL)}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue>
+                    {(value: string) =>
+                      value === ALL ? "All employees" : (employees.find((e) => e.id === value)?.name ?? value)
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All employees</SelectItem>
+                  {employees.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {session && activeEntry && (
               <Button variant="outline" size="sm" onClick={handleCaptureNow}>
                 <RefreshCw className="size-3.5" /> Capture Now
@@ -253,23 +268,25 @@ function ScreenLogsPageContent() {
                 className="w-[180px] pl-8"
               />
             </div>
-            <Select value={employeeFilter} onValueChange={(v) => setEmployeeFilter(v ?? ALL)}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue>
-                  {(value: string) =>
-                    value === ALL ? "All employees" : (employees.find((e) => e.id === value)?.name ?? value)
-                  }
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All employees</SelectItem>
-                {employees.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {!isSelfServiceOnly && (
+              <Select value={employeeFilter} onValueChange={(v) => setEmployeeFilter(v ?? ALL)}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue>
+                    {(value: string) =>
+                      value === ALL ? "All employees" : (employees.find((e) => e.id === value)?.name ?? value)
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All employees</SelectItem>
+                  {employees.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select value={actionFilter} onValueChange={(v) => setActionFilter(v ?? ALL)}>
               <SelectTrigger className="w-[160px]">
                 <SelectValue>{(value: string) => (value === ALL ? "All actions" : value)}</SelectValue>
