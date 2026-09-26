@@ -23,12 +23,23 @@ import type { CompanySettings } from "@/lib/types";
 
 export default function SettingsPage() {
   const settings = usePayrollStore((s) => s.settings);
+  const hasHydrated = usePayrollStore((s) => s.hasHydrated);
   const updateSettings = usePayrollStore((s) => s.updateSettings);
-  // Seeded once from the store on mount. Realtime syncs elsewhere in the app
-  // replace `settings` with a new object on every unrelated table change, so
-  // resyncing on every reference change would silently overwrite an admin's
-  // in-progress, unsaved edits here.
   const [form, setForm] = useState<CompanySettings>(settings);
+  // Synced from the store exactly once, the first time real data has loaded
+  // (hasHydrated flips true) — not on every reference change. If this page
+  // mounts before hydrate() finishes, `settings` is still the hardcoded
+  // pre-hydration default; without this, the saved/"fixed" values an
+  // Admin/Owner just persisted would never appear after a reload. Realtime
+  // syncs elsewhere in the app replace `settings` with a new object on every
+  // unrelated table change though, so resyncing on every such change (after
+  // this first one) would silently overwrite an admin's in-progress,
+  // unsaved edits here.
+  const [syncedOnce, setSyncedOnce] = useState(false);
+  if (hasHydrated && !syncedOnce) {
+    setSyncedOnce(true);
+    setForm(settings);
+  }
 
   const { requestOwnerAuth, ownerDialog } = useOwnerGate(
     "Saving changes updates company-wide settings. Enter the owner password to continue.",
@@ -55,6 +66,9 @@ export default function SettingsPage() {
       return;
     }
     await updateSettings(form);
+    // Resync to the exact persisted values (e.g. numeric column rounding),
+    // so what's displayed always matches what's actually now fixed/saved.
+    setForm(usePayrollStore.getState().settings);
     toast.success("Settings saved.");
   };
 
