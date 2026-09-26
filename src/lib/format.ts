@@ -29,6 +29,20 @@ export function hoursBetween(startIso: string, endIso: string | null): number {
 }
 
 /**
+ * Local (not UTC) calendar date as "YYYY-MM-DD", from a Date or an ISO
+ * string. Use this for date-range filtering/grouping so it matches the day
+ * the user actually sees displayed (formatDate/formatTime use local time
+ * too) — slicing an ISO string directly reads the UTC date, which silently
+ * shifts to the wrong day for any timestamp near local midnight in a
+ * timezone offset from UTC.
+ */
+export function localDateStr(value: Date | string): string {
+  const d = typeof value === "string" ? new Date(value) : value;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
  * Rounds a clock-in time to the nearest hour: 30+ minutes into the hour
  * rounds up to the next hour (e.g. 4:30 or 4:50 -> 5:00), otherwise it
  * rounds down to the start of the current hour (e.g. 4:10 -> 4:00).
@@ -181,8 +195,8 @@ export function computePayrollLineAccurate(
     .filter(
       (t) =>
         t.employeeId === employeeId &&
-        t.clockIn.slice(0, 10) >= periodStart &&
-        t.clockIn.slice(0, 10) <= periodEnd,
+        localDateStr(t.clockIn) >= periodStart &&
+        localDateStr(t.clockIn) <= periodEnd,
     )
     .reduce((sum, t) => sum + computeEntryMinutes(t.clockIn, t.clockOut, scheduleIn, scheduleOut).totalMinutes, 0);
   const grossPay = (periodMinutes / 60) * hourlyRate;

@@ -16,13 +16,13 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { usePayrollStore } from "@/lib/store";
+import { localDateStr } from "@/lib/format";
 
 function defaultPeriod() {
   const end = new Date();
   const start = new Date();
   start.setDate(start.getDate() - 13);
-  const toDateInput = (d: Date) => d.toISOString().slice(0, 10);
-  return { start: toDateInput(start), end: toDateInput(end) };
+  return { start: localDateStr(start), end: localDateStr(end) };
 }
 
 export function RunPayrollDialog() {

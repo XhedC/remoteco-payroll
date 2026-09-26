@@ -41,18 +41,14 @@ import {
   formatHoursMinutes,
   formatMinutes,
   formatTime,
+  localDateStr,
 } from "@/lib/format";
 
 const ALL_EMPLOYEES = "all";
 
-function toDateStr(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
 function datePreset(kind: "today" | "week" | "month" | "last7" | "last30"): [string, string] {
   const today = new Date();
-  const to = toDateStr(today);
+  const to = localDateStr(today);
 
   if (kind === "today") return [to, to];
 
@@ -61,18 +57,18 @@ function datePreset(kind: "today" | "week" | "month" | "last7" | "last30"): [str
     const day = start.getDay();
     const diffToMonday = day === 0 ? -6 : 1 - day;
     start.setDate(start.getDate() + diffToMonday);
-    return [toDateStr(start), to];
+    return [localDateStr(start), to];
   }
 
   if (kind === "month") {
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
-    return [toDateStr(start), to];
+    return [localDateStr(start), to];
   }
 
   const days = kind === "last7" ? 6 : 29;
   const start = new Date(today);
   start.setDate(start.getDate() - days);
-  return [toDateStr(start), to];
+  return [localDateStr(start), to];
 }
 
 export default function TimeRecordPage() {
@@ -106,10 +102,10 @@ export default function TimeRecordPage() {
         ? timeEntries
         : timeEntries.filter((t) => t.employeeId === effectiveFilter);
     if (dateFrom) {
-      entries = entries.filter((t) => t.clockIn.slice(0, 10) >= dateFrom);
+      entries = entries.filter((t) => localDateStr(t.clockIn) >= dateFrom);
     }
     if (dateTo) {
-      entries = entries.filter((t) => t.clockIn.slice(0, 10) <= dateTo);
+      entries = entries.filter((t) => localDateStr(t.clockIn) <= dateTo);
     }
     return [...entries].sort((a, b) => new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime());
   }, [timeEntries, effectiveFilter, dateFrom, dateTo]);
