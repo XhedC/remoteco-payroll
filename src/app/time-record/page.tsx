@@ -181,7 +181,20 @@ export default function TimeRecordPage() {
     });
 
     const escapeCsv = (value: string) => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
-    const csv = [header, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n");
+    const mainSection = [header, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n");
+
+    const subtotalHeader = ["Employee", "Records", "Subtotal Hours"];
+    const subtotalRows = subtotals.map((row) => [
+      row.name,
+      String(row.records),
+      formatHoursMinutes(row.totalMinutes),
+    ]);
+    subtotalRows.push(["Total", String(filteredEntries.length), formatHoursMinutes(totalMinutesAll)]);
+    const subtotalSection = [subtotalHeader, ...subtotalRows]
+      .map((row) => row.map(escapeCsv).join(","))
+      .join("\n");
+
+    const csv = `${mainSection}\n\nSubtotal by Employee\n${subtotalSection}`;
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -238,7 +251,11 @@ export default function TimeRecordPage() {
           <div>
             <div className="flex items-center gap-2">
               <CardTitle>Time Records</CardTitle>
-              <Button variant="outline" size="sm" onClick={handleDownload}>
+              <Button
+                size="sm"
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                onClick={handleDownload}
+              >
                 <Download className="size-3.5" /> Download
               </Button>
             </div>
