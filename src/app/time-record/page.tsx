@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Trash2, X, CalendarRange, ChevronDown, Download } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import { Trash2, X, CalendarRange, ChevronDown, Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,10 +73,13 @@ function datePreset(kind: "today" | "week" | "month" | "last7" | "last30"): [str
   return [localDateStr(start), to];
 }
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+
 export default function TimeRecordPage() {
   const employees = usePayrollStore((s) => s.employees);
   const timeEntries = usePayrollStore((s) => s.timeEntries);
   const deleteTimeEntry = usePayrollStore((s) => s.deleteTimeEntry);
+  const settings = usePayrollStore((s) => s.settings);
   const currentEmployee = usePayrollStore((s) =>
     s.session ? s.getEmployee(s.session.employeeId) : undefined,
   );
@@ -82,6 +87,8 @@ export default function TimeRecordPage() {
   const [filter, setFilter] = useState(ALL_EMPLOYEES);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(10);
+  const [page, setPage] = useState(1);
   const hasDateFilter = !!dateFrom || !!dateTo;
   const effectiveFilter = isSelfServiceOnly ? (currentEmployee?.id ?? ALL_EMPLOYEES) : filter;
 
@@ -109,6 +116,12 @@ export default function TimeRecordPage() {
     }
     return [...entries].sort((a, b) => new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime());
   }, [timeEntries, effectiveFilter, dateFrom, dateTo]);
+
+  // "Display Choices" only limits how many rows are shown on screen — totals,
+  // subtotals, and exports below all still cover every filtered record.
+  const totalPages = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedEntries = filteredEntries.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const totalMinutesAll = filteredEntries.reduce((sum, t) => {
     const employee = getEmployeeOrOwner(employees, t.employeeId);
@@ -202,6 +215,80 @@ export default function TimeRecordPage() {
     toast.success("Time records downloaded.");
   };
 
+  const handleExportPdf = () => {
+    const doc = new jsPDF({ orientation: "landscape" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginX = 14;
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(settings.companyName || "Company", marginX, 16);
+    doc.text("Time Records", pageWidth - marginX, 16, { align: "right" });
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    const subtitle = hasDateFilter
+      ? `${dateFrom ? formatDate(`${dateFrom}T00:00:00`) : "Earliest"} – ${dateTo ? formatDate(`${dateTo}T00:00:00`) : "Latest"}`
+      : "All dates";
+    doc.text(
+      `${filteredEntries.length} record(s) • ${formatHoursMinutes(totalMinutesAll)} total hours • ${subtitle}`,
+      marginX,
+      22,
+    );
+
+    const rows = filteredEntries.map((entry) => {
+      const employee = getEmployeeOrOwner(employees, entry.employeeId);
+      const { late, overtime, totalMinutes } = computeEntryMinutes(
+        entry.clockIn,
+        entry.clockOut,
+        employee?.scheduleIn,
+        employee?.scheduleOut,
+      );
+      return [
+        employee?.name ?? "Unknown",
+        formatDate(entry.clockIn),
+        formatTime(entry.clockIn),
+        entry.clockOut ? formatTime(entry.clockOut) : "In progress",
+        formatHoursMinutes(totalMinutes),
+        formatMinutes(overtime),
+        formatMinutes(late),
+        entry.note ?? "",
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 28,
+      head: [["Employee", "Date", "Clock In", "Clock Out", "Hours", "Overtime", "Late", "Note"]],
+      body: rows,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [5, 150, 105] },
+      margin: { left: marginX, right: marginX },
+    });
+
+    if (subtotals.length > 0) {
+      const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Subtotal by Employee", marginX, finalY + 10);
+
+      autoTable(doc, {
+        startY: finalY + 14,
+        head: [["Employee", "Records", "Subtotal Hours"]],
+        body: [
+          ...subtotals.map((row) => [row.name, String(row.records), formatHoursMinutes(row.totalMinutes)]),
+          ["Total", String(filteredEntries.length), formatHoursMinutes(totalMinutesAll)],
+        ],
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [5, 150, 105] },
+        margin: { left: marginX, right: marginX },
+      });
+    }
+
+    const suffix = hasDateFilter ? `_${dateFrom || "start"}_to_${dateTo || "now"}` : "";
+    doc.save(`time-records${suffix}.pdf`);
+    toast.success("Time records exported as PDF.");
+  };
+
   return (
     <AppShell title="Time Record">
       {!isSelfServiceOnly && subtotals.length > 0 && (
@@ -253,6 +340,13 @@ export default function TimeRecordPage() {
                 onClick={handleDownload}
               >
                 <Download className="size-3.5" /> Download
+              </Button>
+              <Button
+                size="sm"
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                onClick={handleExportPdf}
+              >
+                <FileText className="size-3.5" /> Export as PDF
               </Button>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -312,6 +406,31 @@ export default function TimeRecordPage() {
               </Button>
             )}
 
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="tr-page-size" className="text-xs text-muted-foreground">
+                Display
+              </Label>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  setPageSize(Number(v) as (typeof PAGE_SIZE_OPTIONS)[number]);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger id="tr-page-size" className="w-[90px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {!isSelfServiceOnly && (
               <>
                 <Select value={filter} onValueChange={(v) => setFilter(v ?? ALL_EMPLOYEES)}>
@@ -348,7 +467,7 @@ export default function TimeRecordPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredEntries.map((entry) => {
+              {pagedEntries.map((entry) => {
                 const employee = getEmployeeOrOwner(employees, entry.employeeId);
                 const { late, overtime, totalMinutes } = computeEntryMinutes(
                   entry.clockIn,
@@ -409,6 +528,35 @@ export default function TimeRecordPage() {
               )}
             </TableBody>
           </Table>
+          {filteredEntries.length > 0 && (
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">
+                Showing {(safePage - 1) * pageSize + 1}–
+                {Math.min(safePage * pageSize, filteredEntries.length)} of {filteredEntries.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(safePage - 1)}
+                >
+                  Previous
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Page {safePage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(safePage + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
       {ownerDialog}
