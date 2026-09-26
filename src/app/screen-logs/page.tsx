@@ -3,7 +3,9 @@
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Camera, Trash2, RefreshCw } from "lucide-react";
+import { jsPDF } from "jspdf";
+import JSZip from "jszip";
+import { Search, Camera, Trash2, RefreshCw, Download, FileText } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +42,95 @@ import { formatDateTime } from "@/lib/format";
 import type { ScreenLogAction } from "@/lib/types";
 
 const ALL = "all";
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
+
+function DisplayChoices({
+  value,
+  onChange,
+}: {
+  value: PageSize;
+  onChange: (size: PageSize) => void;
+}) {
+  return (
+    <Select value={String(value)} onValueChange={(v) => v && onChange(Number(v) as PageSize)}>
+      <SelectTrigger className="w-[110px]">
+        <SelectValue>{(v: string) => `Show ${v}`}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {PAGE_SIZE_OPTIONS.map((size) => (
+          <SelectItem key={size} value={String(size)}>
+            {size}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function PaginationBar({
+  page,
+  totalPages,
+  onPrev,
+  onNext,
+}: {
+  page: number;
+  totalPages: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="mt-3 flex items-center justify-end gap-2">
+      <Button variant="outline" size="sm" disabled={page <= 1} onClick={onPrev}>
+        Previous
+      </Button>
+      <span className="text-xs text-muted-foreground">
+        Page {page} of {totalPages}
+      </span>
+      <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={onNext}>
+        Next
+      </Button>
+    </div>
+  );
+}
+
+async function fetchImageDataUrl(url: string): Promise<string> {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Fetches an image and re-encodes it as JPEG via canvas. PDF exports embed
+ * screenshots uncompressed as PNG otherwise, which can balloon a handful of
+ * screenshots into a file tens of megabytes in size — JPEG at this quality
+ * keeps it a faithful copy at a small fraction of that size.
+ */
+async function fetchImageAsJpeg(url: string): Promise<{ dataUrl: string; width: number; height: number }> {
+  const dataUrl = await fetchImageDataUrl(url);
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("image load failed"));
+    img.src = dataUrl;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas context unavailable");
+  ctx.drawImage(img, 0, 0);
+  return {
+    dataUrl: canvas.toDataURL("image/jpeg", 0.72),
+    width: img.naturalWidth,
+    height: img.naturalHeight,
+  };
+}
 const actionOptions: ScreenLogAction[] = [
   "Login",
   "Logout",
@@ -76,6 +167,7 @@ function ScreenLogsPageContent() {
   const employees = usePayrollStore((s) => s.employees);
   const screenLogs = usePayrollStore((s) => s.screenLogs);
   const screenshots = usePayrollStore((s) => s.screenshots);
+  const settings = usePayrollStore((s) => s.settings);
   const session = usePayrollStore((s) => s.session);
   const currentEmployee = usePayrollStore((s) =>
     session ? s.getEmployee(session.employeeId) : undefined,
@@ -100,6 +192,10 @@ function ScreenLogsPageContent() {
   const [screenshotEmployeeFilter, setScreenshotEmployeeFilter] = useState(
     () => searchParams.get("employee") ?? ALL,
   );
+  const [screenshotPageSize, setScreenshotPageSize] = useState<PageSize>(10);
+  const [screenshotPage, setScreenshotPage] = useState(1);
+  const [logPageSize, setLogPageSize] = useState<PageSize>(10);
+  const [logPage, setLogPage] = useState(1);
 
   // Self-service employees only ever see their own activity/screenshots —
   // other employees' records are blocked, regardless of what these filter
@@ -130,6 +226,19 @@ function ScreenLogsPageContent() {
       .sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime());
   }, [screenshots, effectiveScreenshotFilter]);
 
+  // "Display Choices" only limits how many rows/tiles render on screen —
+  // Download and Export as PDF below still always cover every filtered record.
+  const screenshotTotalPages = Math.max(1, Math.ceil(filteredScreenshots.length / screenshotPageSize));
+  const screenshotSafePage = Math.min(screenshotPage, screenshotTotalPages);
+  const pagedScreenshots = filteredScreenshots.slice(
+    (screenshotSafePage - 1) * screenshotPageSize,
+    screenshotSafePage * screenshotPageSize,
+  );
+
+  const logTotalPages = Math.max(1, Math.ceil(filtered.length / logPageSize));
+  const logSafePage = Math.min(logPage, logTotalPages);
+  const pagedLogs = filtered.slice((logSafePage - 1) * logPageSize, logSafePage * logPageSize);
+
   const handleCaptureNow = async () => {
     if (!session || !activeEntry) return;
     let stream = screenStream;
@@ -156,6 +265,93 @@ function ScreenLogsPageContent() {
       await deleteScreenshot(id);
       toast.success("Screenshot deleted.");
     });
+  };
+
+  const handleDownloadScreenshots = async () => {
+    if (filteredScreenshots.length === 0) {
+      toast.error("No screenshots to download.");
+      return;
+    }
+    await toast.promise(
+      (async () => {
+        const zip = new JSZip();
+        for (const shot of filteredScreenshots) {
+          const employee = getEmployeeOrOwner(employees, shot.employeeId);
+          const safeName = (employee?.name ?? "unknown").replace(/[^a-z0-9]+/gi, "_");
+          const ts = shot.capturedAt.replace(/[^0-9]/g, "-");
+          try {
+            const res = await fetch(shot.imageDataUrl);
+            const blob = await res.blob();
+            zip.file(`${safeName}_${ts}.png`, blob);
+          } catch {
+            // Skip a screenshot whose signed URL has expired/failed rather than failing the whole export.
+          }
+        }
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "screenshots.zip";
+        a.click();
+        URL.revokeObjectURL(url);
+      })(),
+      {
+        loading: "Preparing screenshots for download...",
+        success: "Screenshots downloaded.",
+        error: "Unable to download screenshots.",
+      },
+    );
+  };
+
+  const handleExportScreenshotsPdf = async () => {
+    if (filteredScreenshots.length === 0) {
+      toast.error("No screenshots to export.");
+      return;
+    }
+    await toast.promise(
+      (async () => {
+        const doc = new jsPDF({ orientation: "landscape" });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const marginX = 14;
+
+        for (let i = 0; i < filteredScreenshots.length; i += 1) {
+          const shot = filteredScreenshots[i];
+          const employee = getEmployeeOrOwner(employees, shot.employeeId);
+          if (i > 0) doc.addPage();
+
+          doc.setFontSize(14);
+          doc.setFont("helvetica", "bold");
+          doc.text(settings.companyName || "Company", marginX, 16);
+          doc.text("Screenshot Records", pageWidth - marginX, 16, { align: "right" });
+
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "normal");
+          doc.text(`${employee?.name ?? "Unknown"} • ${formatDateTime(shot.capturedAt)}`, marginX, 24);
+
+          try {
+            const { dataUrl, width, height } = await fetchImageAsJpeg(shot.imageDataUrl);
+            const availW = pageWidth - marginX * 2;
+            const availH = pageHeight - 34;
+            const scale = Math.min(availW / width, availH / height);
+            const w = width * scale;
+            const h = height * scale;
+            const x = (pageWidth - w) / 2;
+            doc.addImage(dataUrl, "JPEG", x, 30, w, h);
+          } catch {
+            doc.setFontSize(10);
+            doc.text("Unable to load this screenshot.", marginX, 40);
+          }
+        }
+
+        doc.save("screenshots.pdf");
+      })(),
+      {
+        loading: "Preparing PDF export...",
+        success: "Screenshots exported as PDF.",
+        error: "Unable to export screenshots as PDF.",
+      },
+    );
   };
 
   return (
@@ -191,6 +387,27 @@ function ScreenLogsPageContent() {
                 </SelectContent>
               </Select>
             )}
+            <DisplayChoices
+              value={screenshotPageSize}
+              onChange={(size) => {
+                setScreenshotPageSize(size);
+                setScreenshotPage(1);
+              }}
+            />
+            <Button
+              size="sm"
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              onClick={handleDownloadScreenshots}
+            >
+              <Download className="size-3.5" /> Download
+            </Button>
+            <Button
+              size="sm"
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              onClick={handleExportScreenshotsPdf}
+            >
+              <FileText className="size-3.5" /> Export as PDF
+            </Button>
             {session && activeEntry && (
               <Button variant="outline" size="sm" onClick={handleCaptureNow}>
                 <RefreshCw className="size-3.5" /> Capture Now
@@ -205,7 +422,7 @@ function ScreenLogsPageContent() {
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {filteredScreenshots.map((shot) => {
+              {pagedScreenshots.map((shot) => {
                 const employee = getEmployeeOrOwner(employees, shot.employeeId);
                 return (
                   <div key={shot.id} className="overflow-hidden rounded-lg border">
@@ -246,6 +463,14 @@ function ScreenLogsPageContent() {
                 );
               })}
             </div>
+          )}
+          {filteredScreenshots.length > 0 && (
+            <PaginationBar
+              page={screenshotSafePage}
+              totalPages={screenshotTotalPages}
+              onPrev={() => setScreenshotPage(screenshotSafePage - 1)}
+              onNext={() => setScreenshotPage(screenshotSafePage + 1)}
+            />
           )}
         </CardContent>
       </Card>
@@ -300,6 +525,13 @@ function ScreenLogsPageContent() {
                 ))}
               </SelectContent>
             </Select>
+            <DisplayChoices
+              value={logPageSize}
+              onChange={(size) => {
+                setLogPageSize(size);
+                setLogPage(1);
+              }}
+            />
           </div>
         </CardHeader>
         <CardContent>
@@ -314,7 +546,7 @@ function ScreenLogsPageContent() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((log) => {
+              {pagedLogs.map((log) => {
                 const employee = getEmployeeOrOwner(employees, log.employeeId);
                 return (
                   <TableRow key={log.id}>
@@ -339,6 +571,14 @@ function ScreenLogsPageContent() {
               )}
             </TableBody>
           </Table>
+          {filtered.length > 0 && (
+            <PaginationBar
+              page={logSafePage}
+              totalPages={logTotalPages}
+              onPrev={() => setLogPage(logSafePage - 1)}
+              onNext={() => setLogPage(logSafePage + 1)}
+            />
+          )}
         </CardContent>
       </Card>
       {ownerDialog}
