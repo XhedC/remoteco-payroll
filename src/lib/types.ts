@@ -44,6 +44,8 @@ export interface PayrollLine {
   netPay: number;
   /** Per-employee payment status, settable independently of the run's overall status. */
   status: PayPeriodStatus;
+  /** Admin sign-off gate: threshold-eligible overtime is only actually paid once this is true. */
+  overtimeApproved: boolean;
 }
 
 export interface PayrollRun {
@@ -110,4 +112,8 @@ export interface CompanySettings {
   requireGeoClockIn: boolean;
   notifyOnMissedClockOut: boolean;
   notifyOnPayrollRun: boolean;
+  /** Minimum overtime duration (minutes) required for overtime to be eligible for payment. Default 30. */
+  minimumPaidOtMinutes: number;
+  /** Period before scheduled shift start (minutes) not automatically counted as paid time. Default 15. */
+  unpaidEarlyClockinMinutes: number;
 }

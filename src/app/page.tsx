@@ -20,6 +20,7 @@ export default function DashboardPage() {
   const timeEntries = usePayrollStore((s) => s.timeEntries);
   const screenLogs = usePayrollStore((s) => s.screenLogs);
   const payrollRuns = usePayrollStore((s) => s.payrollRuns);
+  const settings = usePayrollStore((s) => s.settings);
 
   const activeEmployees = employees.filter((e) => e.status === "Active");
   const clockedInEntries = timeEntries.filter((t) => t.clockOut === null);
@@ -46,6 +47,9 @@ export default function DashboardPage() {
             timeEntries,
             employee?.scheduleIn,
             employee?.scheduleOut,
+            settings.minimumPaidOtMinutes,
+            settings.overtimeMultiplier,
+            l.overtimeApproved,
           ).netPay
         );
       }, 0)

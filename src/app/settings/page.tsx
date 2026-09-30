@@ -40,6 +40,7 @@ export default function SettingsPage() {
     setSyncedOnce(true);
     setForm(settings);
   }
+  const [submitting, setSubmitting] = useState(false);
 
   const { requestOwnerAuth, ownerDialog } = useOwnerGate(
     "Saving changes updates company-wide settings. Enter the owner password to continue.",
@@ -65,7 +66,25 @@ export default function SettingsPage() {
       toast.error("Default Adjustment Rate must be between 0% and 100%.");
       return;
     }
+    if (
+      form.minimumPaidOtMinutes == null ||
+      form.minimumPaidOtMinutes < 0 ||
+      form.minimumPaidOtMinutes > 480
+    ) {
+      toast.error("Minimum Paid OT Minutes must be between 0 and 480.");
+      return;
+    }
+    if (
+      form.unpaidEarlyClockinMinutes == null ||
+      form.unpaidEarlyClockinMinutes < 0 ||
+      form.unpaidEarlyClockinMinutes > 240
+    ) {
+      toast.error("Early Clock-In Window must be between 0 and 240 minutes.");
+      return;
+    }
+    setSubmitting(true);
     await updateSettings(form);
+    setSubmitting(false);
     // Resync to the exact persisted values (e.g. numeric column rounding),
     // so what's displayed always matches what's actually now fixed/saved.
     setForm(usePayrollStore.getState().settings);
@@ -73,6 +92,10 @@ export default function SettingsPage() {
   };
 
   const handleSave = () => requestOwnerAuth(saveSettings);
+  const handleReset = () => {
+    setForm(settings);
+    toast.info("Unsaved changes discarded.");
+  };
 
   return (
     <AppShell title="Settings">
@@ -186,6 +209,51 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Time & Attendance Rules</CardTitle>
+              <CardDescription>
+                Governs when overtime becomes eligible for payment and how early clock-ins are
+                treated. Actual attendance records are never discarded — these thresholds only
+                affect what&apos;s automatically counted as payable.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="s-min-ot">Minimum Paid OT Minutes</Label>
+                <Input
+                  id="s-min-ot"
+                  type="number"
+                  min="0"
+                  max="480"
+                  value={form.minimumPaidOtMinutes}
+                  onChange={(e) => set("minimumPaidOtMinutes", Number(e.target.value))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Minimum overtime duration (0–480 min) required for that day&apos;s overtime to be
+                  eligible for payment. Overtime below this is still recorded, just not
+                  automatically eligible.
+                </p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="s-early-window">Early Clock-In Window (Minutes)</Label>
+                <Input
+                  id="s-early-window"
+                  type="number"
+                  min="0"
+                  max="240"
+                  value={form.unpaidEarlyClockinMinutes}
+                  onChange={(e) => set("unpaidEarlyClockinMinutes", Number(e.target.value))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Period before scheduled shift start (0–240 min) used to flag early arrivals for
+                  review. Time spent on required or authorized work is never automatically
+                  discarded.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="flex flex-col gap-4">
@@ -243,9 +311,14 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Button onClick={handleSave} size="lg">
-            Save Settings
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleReset} disabled={submitting} className="flex-1">
+              Reset
+            </Button>
+            <Button onClick={handleSave} size="lg" disabled={submitting} className="flex-1">
+              {submitting ? "Saving..." : "Save Settings"}
+            </Button>
+          </div>
         </div>
       </div>
       {ownerDialog}

@@ -43,6 +43,7 @@ export default function PayrollPage() {
   const payrollRuns = usePayrollStore((s) => s.payrollRuns);
   const employees = usePayrollStore((s) => s.employees);
   const timeEntries = usePayrollStore((s) => s.timeEntries);
+  const settings = usePayrollStore((s) => s.settings);
   const deletePayrollRun = usePayrollStore((s) => s.deletePayrollRun);
   const currentEmployee = usePayrollStore((s) =>
     s.session ? s.getEmployee(s.session.employeeId) : undefined,
@@ -97,6 +98,9 @@ export default function PayrollPage() {
         timeEntries,
         employee?.scheduleIn,
         employee?.scheduleOut,
+        settings.minimumPaidOtMinutes,
+        settings.overtimeMultiplier,
+        line.overtimeApproved,
       ),
     };
   };

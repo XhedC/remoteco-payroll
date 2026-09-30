@@ -54,6 +54,7 @@ export default function EmployeeHistoryPage() {
   const payrollRuns = usePayrollStore((s) => s.payrollRuns);
   const screenLogs = usePayrollStore((s) => s.screenLogs);
   const isClockedIn = usePayrollStore((s) => s.isClockedIn);
+  const settings = usePayrollStore((s) => s.settings);
 
   const employee = getEmployeeOrOwner(employees, employeeId);
 
@@ -84,6 +85,9 @@ export default function EmployeeHistoryPage() {
         timeEntries,
         employee?.scheduleIn,
         employee?.scheduleOut,
+        settings.minimumPaidOtMinutes,
+        settings.overtimeMultiplier,
+        line.overtimeApproved,
       );
       return [{ run, line, periodMinutes, grossPay, addition, deduction, netPay }];
     })

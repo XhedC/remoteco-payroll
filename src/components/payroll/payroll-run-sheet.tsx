@@ -33,6 +33,7 @@ import { usePayrollStore } from "@/lib/store";
 import { useOwnerGate } from "@/lib/use-owner-gate";
 import { computePayrollLineAccurate, formatCurrency, formatDate, formatHoursMinutes } from "@/lib/format";
 import { EditPayrollLineDialog } from "./edit-payroll-line-dialog";
+import { PayrollLineDetailsDialog } from "./payroll-line-details-dialog";
 import type { PayPeriodStatus, PayrollRun } from "@/lib/types";
 
 const STATUS_OPTIONS: PayPeriodStatus[] = ["Pending", "On Processing", "Paid", "Unpaid"];
@@ -41,10 +42,12 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
   const [open, setOpen] = useState(false);
   const employees = usePayrollStore((s) => s.employees);
   const timeEntries = usePayrollStore((s) => s.timeEntries);
+  const settings = usePayrollStore((s) => s.settings);
   const payslipConfirmations = usePayrollStore((s) => s.payslipConfirmations);
   const updatePayrollRunStatus = usePayrollStore((s) => s.updatePayrollRunStatus);
   const updatePayrollLineStatus = usePayrollStore((s) => s.updatePayrollLineStatus);
   const deletePayrollLine = usePayrollStore((s) => s.deletePayrollLine);
+  const setOvertimeApproval = usePayrollStore((s) => s.setOvertimeApproval);
   const currentEmployee = usePayrollStore((s) =>
     s.session ? s.getEmployee(s.session.employeeId) : undefined,
   );
@@ -62,7 +65,7 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
   // accurate, late/overtime-netted hours shown everywhere else in the app.
   const computedLines = run.lines.map((line) => {
     const employee = employees.find((e) => e.id === line.employeeId);
-    const { periodMinutes, grossPay, addition, deduction, netPay } = computePayrollLineAccurate(
+    const accurate = computePayrollLineAccurate(
       run.periodStart,
       run.periodEnd,
       line.employeeId,
@@ -72,8 +75,11 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
       timeEntries,
       employee?.scheduleIn,
       employee?.scheduleOut,
+      settings.minimumPaidOtMinutes,
+      settings.overtimeMultiplier,
+      line.overtimeApproved,
     );
-    return { line, employee, periodMinutes, grossPay, addition, deduction, netPay };
+    return { line, employee, ...accurate };
   });
 
   const totalNet = computedLines.reduce((sum, l) => sum + l.netPay, 0);
@@ -111,6 +117,17 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
         return;
       }
       toast.success(`${employeeName} removed from this payroll run.`);
+    });
+  };
+
+  const handleToggleOvertimeApproval = (employeeId: string, employeeName: string, approved: boolean) => {
+    requestOwnerAuth(async () => {
+      const result = await setOvertimeApproval(run.id, employeeId, approved);
+      if (!result.success) {
+        toast.error(result.error ?? "Unable to update overtime approval.");
+        return;
+      }
+      toast.success(`${approved ? "Approved" : "Revoked"} overtime for ${employeeName}.`);
     });
   };
 
@@ -157,13 +174,25 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
                 <TableHead>Additions</TableHead>
                 <TableHead>Deduction</TableHead>
                 <TableHead>Net</TableHead>
+                <TableHead>Overtime</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Confirmation</TableHead>
-                {canAdjustPayroll && <TableHead className="text-right">Actions</TableHead>}
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {computedLines.map(({ line, employee, periodMinutes, grossPay, addition, deduction, netPay }) => {
+              {computedLines.map((computedLine) => {
+                const {
+                  line,
+                  employee,
+                  periodMinutes,
+                  grossPay,
+                  addition,
+                  deduction,
+                  netPay,
+                  calculationStatus,
+                  approvalStatus,
+                } = computedLine;
                 const employeeName = employee?.name ?? "Unknown";
                 const confirmation = confirmationFor(line.employeeId);
                 return (
@@ -174,6 +203,21 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
                     <TableCell className="text-muted-foreground">{formatCurrency(addition)}</TableCell>
                     <TableCell className="text-muted-foreground">{formatCurrency(deduction)}</TableCell>
                     <TableCell className="font-medium">{formatCurrency(netPay)}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <Badge variant={calculationStatus === "Eligible" ? "default" : "outline"} className="w-fit">
+                          {calculationStatus}
+                        </Badge>
+                        {calculationStatus !== "No Overtime" && (
+                          <Badge
+                            variant={approvalStatus === "Approved" ? "default" : "secondary"}
+                            className="w-fit"
+                          >
+                            {approvalStatus}
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Select
                         value={line.status}
@@ -202,25 +246,43 @@ export function PayrollRunSheet({ run }: { run: PayrollRun }) {
                         <Badge variant="outline">Awaiting confirmation</Badge>
                       )}
                     </TableCell>
-                    {canAdjustPayroll && (
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <EditPayrollLineDialog
-                            run={run}
-                            line={line}
-                            employeeName={employeeName}
-                            grossPay={grossPay}
-                          />
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <PayrollLineDetailsDialog
+                          run={run}
+                          employeeName={employeeName}
+                          computed={computedLine}
+                        />
+                        {canAdjustPayroll && calculationStatus !== "No Overtime" && (
                           <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => handleDeleteLine(line.employeeId, employeeName)}
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              handleToggleOvertimeApproval(line.employeeId, employeeName, !line.overtimeApproved)
+                            }
                           >
-                            <Trash2 className="size-3 text-destructive" />
+                            {line.overtimeApproved ? "Revoke OT" : "Approve OT"}
                           </Button>
-                        </div>
-                      </TableCell>
-                    )}
+                        )}
+                        {canAdjustPayroll && (
+                          <>
+                            <EditPayrollLineDialog
+                              run={run}
+                              line={line}
+                              employeeName={employeeName}
+                              grossPay={grossPay}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => handleDeleteLine(line.employeeId, employeeName)}
+                            >
+                              <Trash2 className="size-3 text-destructive" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 );
               })}

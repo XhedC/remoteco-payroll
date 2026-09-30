@@ -99,6 +99,7 @@ function mapPayrollLine(row: PayrollLineRow): PayrollLine {
     addition: Number(row.addition),
     netPay: Number(row.net_pay),
     status: row.status,
+    overtimeApproved: row.overtime_approved,
   };
 }
 
@@ -115,6 +116,8 @@ function mapSettings(row: CompanySettingsRow): CompanySettings {
     requireGeoClockIn: row.require_geo_clock_in,
     notifyOnMissedClockOut: row.notify_on_missed_clock_out,
     notifyOnPayrollRun: row.notify_on_payroll_run,
+    minimumPaidOtMinutes: Number(row.minimum_paid_ot_minutes),
+    unpaidEarlyClockinMinutes: Number(row.unpaid_early_clockin_minutes),
   };
 }
 
@@ -238,6 +241,8 @@ interface PayrollStore {
   ) => Promise<ActionResult>;
   /** Removes a single employee's line (and any payslip confirmation) from a run. */
   deletePayrollLine: (runId: string, employeeId: string) => Promise<ActionResult>;
+  /** Admin sign-off gate for a payroll line's threshold-eligible overtime; only approved overtime is actually paid. */
+  setOvertimeApproval: (runId: string, employeeId: string, approved: boolean) => Promise<ActionResult>;
   /** Deletes an entire payroll run, along with all of its lines and payslip confirmations. */
   deletePayrollRun: (runId: string) => Promise<ActionResult>;
   /** Employee acknowledges a payslip email ("Confirm" button). */
@@ -1106,6 +1111,7 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
   },
 
   updateSettings: async (patch) => {
+    const previous = get().settings;
     const { data, error } = await supabase
       .from("company_settings")
       .update({
@@ -1126,20 +1132,72 @@ export const usePayrollStore = create<PayrollStore>()((set, get) => ({
           notify_on_missed_clock_out: patch.notifyOnMissedClockOut,
         }),
         ...(patch.notifyOnPayrollRun !== undefined && { notify_on_payroll_run: patch.notifyOnPayrollRun }),
+        ...(patch.minimumPaidOtMinutes !== undefined && {
+          minimum_paid_ot_minutes: patch.minimumPaidOtMinutes,
+        }),
+        ...(patch.unpaidEarlyClockinMinutes !== undefined && {
+          unpaid_early_clockin_minutes: patch.unpaidEarlyClockinMinutes,
+        }),
       })
       .eq("id", 1)
       .select()
       .single();
     if (error || !data) return;
 
-    const log = await insertLog(
-      get().session?.employeeId ?? "system",
-      "Settings Change",
-      "Updated company settings",
-    );
+    const next = mapSettings(data);
+    const changedFieldLabels: Record<string, string> = {
+      minimumPaidOtMinutes: "Minimum Paid OT Minutes",
+      unpaidEarlyClockinMinutes: "Early Clock-In Window",
+    };
+    const changes = (Object.keys(changedFieldLabels) as (keyof CompanySettings)[])
+      .filter((key) => patch[key] !== undefined && previous[key] !== next[key])
+      .map((key) => `${changedFieldLabels[key]}: ${previous[key]} → ${next[key]}`);
+    const detail = changes.length > 0 ? `Updated company settings (${changes.join("; ")})` : "Updated company settings";
+
+    const log = await insertLog(get().session?.employeeId ?? "system", "Settings Change", detail);
     set((state) => ({
-      settings: mapSettings(data),
+      settings: next,
       screenLogs: log ? [log, ...state.screenLogs] : state.screenLogs,
     }));
+  },
+
+  setOvertimeApproval: async (runId, employeeId, approved) => {
+    const { payrollRuns, employees } = get();
+    const run = payrollRuns.find((r) => r.id === runId);
+    const line = run?.lines.find((l) => l.employeeId === employeeId);
+    if (!run || !line) return { success: false, error: "Payroll line not found." };
+
+    const { error } = await supabase
+      .from("payroll_lines")
+      .update({ overtime_approved: approved })
+      .eq("payroll_run_id", runId)
+      .eq("employee_id", employeeId);
+    if (error) return { success: false, error: error.message };
+
+    const periodLabel = `${new Date(run.periodStart).toLocaleDateString()} - ${new Date(run.periodEnd).toLocaleDateString()}`;
+    const employeeName =
+      (employeeId === OWNER_EMPLOYEE_ID ? ownerEmployee : employees.find((e) => e.id === employeeId))?.name ??
+      "this employee";
+    const log = await insertLog(
+      get().session?.employeeId ?? "system",
+      "Payroll Run",
+      `${approved ? "Approved" : "Revoked"} overtime for ${employeeName} — ${periodLabel}`,
+    );
+
+    set((state) => ({
+      payrollRuns: state.payrollRuns.map((r) =>
+        r.id !== runId
+          ? r
+          : {
+              ...r,
+              lines: r.lines.map((l) =>
+                l.employeeId === employeeId ? { ...l, overtimeApproved: approved } : l,
+              ),
+            },
+      ),
+      screenLogs: log ? [log, ...state.screenLogs] : state.screenLogs,
+    }));
+
+    return { success: true };
   },
 }));

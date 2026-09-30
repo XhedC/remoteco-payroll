@@ -158,27 +158,62 @@ export function computeEntryMinutes(
   const end = clockOut ? new Date(clockOut) : new Date();
 
   let start = new Date(clockIn);
+  let earlyArrivalMinutes = 0;
   if (scheduleIn) {
     const scheduledStart = new Date(clockIn);
     scheduledStart.setHours(0, 0, 0, 0);
     scheduledStart.setMinutes(parseHHMM(scheduleIn));
-    if (start < scheduledStart) start = scheduledStart;
+    if (start < scheduledStart) {
+      earlyArrivalMinutes = Math.round((scheduledStart.getTime() - start.getTime()) / 60_000);
+      start = scheduledStart;
+    }
   }
 
   const totalMinutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60_000));
   if (totalMinutes < STANDARD_WORKDAY_MINUTES) overtime = 0;
-  return { late, overtime, totalMinutes };
+  return { late, overtime, totalMinutes, earlyArrivalMinutes };
+}
+
+/**
+ * Whether a day's actual overtime minutes qualify for payment under the
+ * configured minimum-duration threshold. Always takes the threshold as a
+ * parameter — never hardcode it — so it reflects whatever an Admin has
+ * currently configured in Payroll Settings (`minimum_paid_ot_minutes`).
+ */
+export function isOvertimeEligible(overtimeMinutes: number, minimumPaidOtMinutes: number): boolean {
+  return overtimeMinutes > 0 && overtimeMinutes >= minimumPaidOtMinutes;
 }
 
 /**
  * Computes a payroll line's accurate financials for one employee over one
- * pay period: Total Hours (minutes) from the employee's actual time entries
- * within [periodStart, periodEnd] (via computeEntryMinutes), Gross Pay as
- * Total Hours x rate, and Net Pay from Gross + Addition + Deduction (Gross +
- * Addition - Deduction = Net always holds). This is the single source of
- * truth used everywhere a payroll line's numbers are displayed, so a rate or
- * schedule change is reflected consistently across the app — it does not
- * touch what's actually stored/paid.
+ * pay period from the employee's actual time entries within
+ * [periodStart, periodEnd] (via computeEntryMinutes). This is the single
+ * source of truth used everywhere a payroll line's numbers are displayed, so
+ * a rate or schedule change is reflected consistently across the app — it
+ * does not touch what's actually stored/paid.
+ *
+ * Overtime pay works in three stages, matching the Time & Attendance Rules
+ * in Payroll Settings:
+ * 1. `actualOvertimeMinutes` — every overtime minute actually worked, summed
+ *    across entries. Always the true figure, never zeroed by the threshold —
+ *    this is the audit trail and is always shown as-is.
+ * 2. `thresholdEligibleOvertimeMinutes` — only entries whose *own* overtime
+ *    individually meets `minimumPaidOtMinutes` contribute (a day with 10
+ *    minutes of overtime doesn't become eligible just because another day in
+ *    the period had 45).
+ * 3. `approvedOvertimeMinutes` / `payableOvertimeMinutes` — the
+ *    threshold-eligible total, gated by `overtimeApproved` (an Admin sign-off
+ *    per payroll line). Only this final amount is actually paid.
+ *
+ * Payable overtime is paid at `hourlyRate * overtimeMultiplier`; every other
+ * minute is paid at the plain hourly rate. When `payableOvertimeMinutes` is 0
+ * (the common case — nothing eligible, or eligible but not yet approved) this
+ * reduces exactly to the previous flat `(periodMinutes/60) * hourlyRate`
+ * formula, so periods without payable overtime are unaffected by this logic.
+ *
+ * Early clock-in keeps the existing auto-exclude-from-Hours behavior (see
+ * computeEntryMinutes) — `unpaidEarlyClockinMinutes` does not change Hours or
+ * pay here, it's surfaced separately for transparency/labeling only.
  */
 export function computePayrollLineAccurate(
   periodStart: string,
@@ -190,19 +225,58 @@ export function computePayrollLineAccurate(
   timeEntries: { employeeId: string; clockIn: string; clockOut: string | null }[],
   scheduleIn: string | undefined,
   scheduleOut: string | undefined,
+  minimumPaidOtMinutes: number,
+  overtimeMultiplier: number,
+  overtimeApproved: boolean,
 ) {
-  const periodMinutes = timeEntries
-    .filter(
-      (t) =>
-        t.employeeId === employeeId &&
-        localDateStr(t.clockIn) >= periodStart &&
-        localDateStr(t.clockIn) <= periodEnd,
-    )
-    .reduce((sum, t) => sum + computeEntryMinutes(t.clockIn, t.clockOut, scheduleIn, scheduleOut).totalMinutes, 0);
-  const grossPay = (periodMinutes / 60) * hourlyRate;
+  const entries = timeEntries.filter(
+    (t) =>
+      t.employeeId === employeeId &&
+      localDateStr(t.clockIn) >= periodStart &&
+      localDateStr(t.clockIn) <= periodEnd,
+  );
+  const computed = entries.map((t) => computeEntryMinutes(t.clockIn, t.clockOut, scheduleIn, scheduleOut));
+
+  const periodMinutes = computed.reduce((sum, c) => sum + c.totalMinutes, 0);
+  const actualOvertimeMinutes = computed.reduce((sum, c) => sum + c.overtime, 0);
+  const thresholdEligibleOvertimeMinutes = computed.reduce(
+    (sum, c) => sum + (isOvertimeEligible(c.overtime, minimumPaidOtMinutes) ? c.overtime : 0),
+    0,
+  );
+  const approvedOvertimeMinutes = overtimeApproved ? thresholdEligibleOvertimeMinutes : 0;
+  const payableOvertimeMinutes = approvedOvertimeMinutes;
+
+  const regularMinutes = periodMinutes - payableOvertimeMinutes;
+  const regularPay = (regularMinutes / 60) * hourlyRate;
+  const overtimePayAmount = (payableOvertimeMinutes / 60) * hourlyRate * overtimeMultiplier;
+  const grossPay = regularPay + overtimePayAmount;
   const netPay = grossPay + addition + adjustment;
   const deduction = -adjustment;
-  return { periodMinutes, grossPay, addition, deduction, netPay };
+
+  const calculationStatus: "No Overtime" | "Below Threshold" | "Eligible" =
+    actualOvertimeMinutes === 0
+      ? "No Overtime"
+      : thresholdEligibleOvertimeMinutes === 0
+        ? "Below Threshold"
+        : "Eligible";
+  const approvalStatus: "Not Applicable" | "Pending Approval" | "Approved" =
+    thresholdEligibleOvertimeMinutes === 0 ? "Not Applicable" : overtimeApproved ? "Approved" : "Pending Approval";
+
+  return {
+    periodMinutes,
+    regularMinutes,
+    grossPay,
+    addition,
+    deduction,
+    netPay,
+    actualOvertimeMinutes,
+    thresholdEligibleOvertimeMinutes,
+    approvedOvertimeMinutes,
+    payableOvertimeMinutes,
+    overtimePayAmount,
+    calculationStatus,
+    approvalStatus,
+  };
 }
 
 /** Formats a (possibly zero) minute count as a duration, e.g. "6h 40m" / "8h". */

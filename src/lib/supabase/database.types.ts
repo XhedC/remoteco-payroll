@@ -20,6 +20,7 @@ export type Database = {
           currency: string
           default_deduction_rate: number
           id: number
+          minimum_paid_ot_minutes: number
           notify_on_missed_clock_out: boolean
           notify_on_payroll_run: boolean
           overtime_multiplier: number
@@ -28,12 +29,14 @@ export type Database = {
           require_geo_clock_in: boolean
           standard_work_hours: number
           timezone: string
+          unpaid_early_clockin_minutes: number
         }
         Insert: {
           company_name?: string
           currency?: string
           default_deduction_rate?: number
           id?: number
+          minimum_paid_ot_minutes?: number
           notify_on_missed_clock_out?: boolean
           notify_on_payroll_run?: boolean
           overtime_multiplier?: number
@@ -42,12 +45,14 @@ export type Database = {
           require_geo_clock_in?: boolean
           standard_work_hours?: number
           timezone?: string
+          unpaid_early_clockin_minutes?: number
         }
         Update: {
           company_name?: string
           currency?: string
           default_deduction_rate?: number
           id?: number
+          minimum_paid_ot_minutes?: number
           notify_on_missed_clock_out?: boolean
           notify_on_payroll_run?: boolean
           overtime_multiplier?: number
@@ -56,6 +61,7 @@ export type Database = {
           require_geo_clock_in?: boolean
           standard_work_hours?: number
           timezone?: string
+          unpaid_early_clockin_minutes?: number
         }
         Relationships: []
       }
@@ -134,6 +140,7 @@ export type Database = {
           hourly_rate: number
           id: string
           net_pay: number
+          overtime_approved: boolean
           overtime_hours: number
           payroll_run_id: string
           regular_hours: number
@@ -147,6 +154,7 @@ export type Database = {
           hourly_rate?: number
           id?: string
           net_pay?: number
+          overtime_approved?: boolean
           overtime_hours?: number
           payroll_run_id: string
           regular_hours?: number
@@ -160,6 +168,7 @@ export type Database = {
           hourly_rate?: number
           id?: string
           net_pay?: number
+          overtime_approved?: boolean
           overtime_hours?: number
           payroll_run_id?: string
           regular_hours?: number

@@ -15,6 +15,8 @@ export const defaultSettings: CompanySettings = {
   requireGeoClockIn: false,
   notifyOnMissedClockOut: true,
   notifyOnPayrollRun: true,
+  minimumPaidOtMinutes: 30,
+  unpaidEarlyClockinMinutes: 15,
 };
 
 // Demo password seeded for every demo employee account in Supabase Auth.
