@@ -65,7 +65,9 @@ export type ScreenLogAction =
   | "Settings Change"
   | "Payroll Run"
   | "Failed Login"
-  | "Payslip Email";
+  | "Payslip Email"
+  | "Idle"
+  | "Active";
 
 export interface ScreenLog {
   id: string;

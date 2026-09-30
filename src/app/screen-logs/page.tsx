@@ -141,6 +141,8 @@ const actionOptions: ScreenLogAction[] = [
   "Payroll Run",
   "Payslip Email",
   "Failed Login",
+  "Idle",
+  "Active",
 ];
 
 const actionTone: Record<ScreenLogAction, "default" | "secondary" | "outline" | "destructive"> = {
@@ -153,6 +155,8 @@ const actionTone: Record<ScreenLogAction, "default" | "secondary" | "outline" | 
   "Payroll Run": "secondary",
   "Payslip Email": "default",
   "Failed Login": "destructive",
+  Idle: "destructive",
+  Active: "default",
 };
 
 export default function ScreenLogsPage() {

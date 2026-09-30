@@ -390,6 +390,8 @@ export type Database = {
         | "Payroll Run"
         | "Failed Login"
         | "Payslip Email"
+        | "Idle"
+        | "Active"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -530,6 +532,8 @@ export const Constants = {
         "Payroll Run",
         "Failed Login",
         "Payslip Email",
+        "Idle",
+        "Active",
       ],
     },
   },
