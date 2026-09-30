@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { StoreHydration } from "@/components/store-hydration";
 import { ScreenshotCaptureManager } from "@/components/screenshot-capture-manager";
 import { AutoClockOutOnClose } from "@/components/auto-clock-out-on-close";
+import { PageViewLogger } from "@/components/page-view-logger";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <StoreHydration />
         <ScreenshotCaptureManager />
         <AutoClockOutOnClose />
+        <PageViewLogger />
         {children}
         <Toaster />
       </body>
